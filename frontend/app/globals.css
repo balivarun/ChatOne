@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --sidebar-bg: #f0f2f5;
+  --chat-bg: #e5ddd5;
+  --message-out: #dcf8c6;
+  --message-in: #ffffff;
+  --accent: #00a884;
+  --accent-hover: #017561;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b141a;
+    --foreground: #e9edef;
+    --sidebar-bg: #111b21;
+    --chat-bg: #0b141a;
+    --message-out: #005c4b;
+    --message-in: #202c33;
+    --accent: #00a884;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar-bg);
+  --color-chat-bg: var(--chat-bg);
+  --color-message-out: var(--message-out);
+  --color-message-in: var(--message-in);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}

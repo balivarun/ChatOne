@@ -1,0 +1,40 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Backend build artifacts
+backend/build/
+backend/.gradle/
+backend/bin/
+*.jar
+*.war
+
+# Frontend build artifacts
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+frontend/.env.local
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android local config
+android/local.properties
+android/.gradle/
+android/app/build/
+android/build/
+android/**/*.apk
+android/**/*.aab
+
+# Logs
+*.log
+logs/

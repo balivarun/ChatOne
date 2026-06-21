@@ -1,0 +1,6 @@
+# Android SDK path — set this to your actual SDK location
+sdk.dir=/home/user/Android/Sdk
+
+# ConnectChat configuration
+BASE_URL=http://10.0.2.2:8080
+WEB_CLIENT_ID=your_google_web_client_id.apps.googleusercontent.com
