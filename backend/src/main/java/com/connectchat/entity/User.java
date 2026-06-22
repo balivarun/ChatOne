@@ -45,6 +45,9 @@ public class User {
     @Column(name = "google_id", unique = true, nullable = false)
     private String googleId;
 
+    @Column(name = "fcm_token", length = 512)
+    private String fcmToken;
+
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 

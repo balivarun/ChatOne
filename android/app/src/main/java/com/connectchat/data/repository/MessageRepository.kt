@@ -83,6 +83,7 @@ fun Message.toEntity(): MessageEntity = MessageEntity(
     replyToSenderName = replyTo?.sender?.displayName,
     isEdited = isEdited,
     isDeleted = isDeleted,
+    isRead = readBy.isNotEmpty(),
     createdAt = createdAt,
     updatedAt = updatedAt
 )

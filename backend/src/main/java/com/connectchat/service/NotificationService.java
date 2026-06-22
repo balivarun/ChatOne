@@ -18,6 +18,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -29,6 +30,7 @@ public class NotificationService {
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final UserService userService;
+    private final FcmService fcmService;
 
     @Transactional
     public void createAndSend(UUID recipientId,
@@ -69,6 +71,18 @@ public class NotificationService {
                     response);
         } catch (Exception e) {
             log.warn("Failed to send real-time notification to user {}: {}", recipientId, e.getMessage());
+        }
+
+        if (recipient.getFcmToken() != null) {
+            fcmService.sendNotification(
+                    recipient.getFcmToken(),
+                    notification.getTitle(),
+                    notification.getBody(),
+                    Map.of(
+                            "type", type.name(),
+                            "referenceId", referenceId != null ? referenceId.toString() : ""
+                    )
+            );
         }
     }
 

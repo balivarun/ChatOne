@@ -7,6 +7,7 @@ import com.connectchat.data.api.model.Conversation
 import com.connectchat.data.api.model.CreateConversationRequest
 import com.connectchat.data.api.model.CreateGroupRequest
 import com.connectchat.data.api.model.EditMessageRequest
+import com.connectchat.data.api.model.FcmTokenRequest
 import com.connectchat.data.api.model.ForwardMessageRequest
 import com.connectchat.data.api.model.Group
 import com.connectchat.data.api.model.MarkReadRequest
@@ -49,6 +50,9 @@ interface ApiService {
     @Multipart
     @POST("api/users/me/avatar")
     suspend fun updateAvatar(@Part file: MultipartBody.Part): ApiResponse<User>
+
+    @PUT("api/users/me/fcm-token")
+    suspend fun updateFcmToken(@Body request: FcmTokenRequest): ApiResponse<Unit>
 
     @GET("api/users/search")
     suspend fun searchUsers(

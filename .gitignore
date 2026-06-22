@@ -38,3 +38,7 @@ android/**/*.aab
 # Logs
 *.log
 logs/
+
+# Firebase credentials (keep locally, never commit)
+backend/src/main/resources/*-firebase-adminsdk-*.json
+backend/src/main/resources/firebase-service-account*.json

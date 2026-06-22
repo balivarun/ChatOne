@@ -1,5 +1,7 @@
 package com.connectchat.data.api.model
 
+import com.google.gson.annotations.SerializedName
+
 enum class ConversationType { DIRECT, GROUP }
 
 data class Conversation(
@@ -9,8 +11,8 @@ data class Conversation(
     val group: Group?,
     val lastMessage: Message?,
     val unreadCount: Int,
-    val isArchived: Boolean,
-    val isPinned: Boolean,
-    val isMuted: Boolean,
+    @SerializedName("archived") val isArchived: Boolean,
+    @SerializedName("pinned") val isPinned: Boolean,
+    @SerializedName("muted") val isMuted: Boolean,
     val updatedAt: String
 )

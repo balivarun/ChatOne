@@ -75,7 +75,7 @@ public class GroupController {
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID id) {
         groupService.deleteGroup(id, principal.getId());
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).body(ApiResponse.success("Group deleted", null));
+        return ResponseEntity.ok(ApiResponse.success("Group deleted", null));
     }
 
     @PostMapping("/{id}/avatar")
@@ -122,7 +122,7 @@ public class GroupController {
             @PathVariable UUID id,
             @PathVariable UUID userId) {
         groupService.removeMember(id, principal.getId(), userId);
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).body(ApiResponse.success("Member removed", null));
+        return ResponseEntity.ok(ApiResponse.success("Member removed", null));
     }
 
     @PutMapping("/{id}/members/{userId}/admin")

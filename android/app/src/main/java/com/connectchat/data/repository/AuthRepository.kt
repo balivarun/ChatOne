@@ -1,6 +1,7 @@
 package com.connectchat.data.repository
 
 import com.connectchat.data.api.ApiService
+import com.connectchat.data.api.model.FcmTokenRequest
 import com.connectchat.data.api.model.MobileAuthRequest
 import com.connectchat.data.api.model.RefreshTokenRequest
 import com.connectchat.data.api.model.User
@@ -29,6 +30,10 @@ class AuthRepository @Inject constructor(
         val response = apiService.refreshToken(RefreshTokenRequest(refresh))
         val data = response.data ?: throw Exception("Refresh failed")
         userPreferences.saveTokens(data.accessToken, data.refreshToken)
+    }
+
+    suspend fun uploadFcmToken(token: String): Result<Unit> = runCatching {
+        apiService.updateFcmToken(FcmTokenRequest(token))
     }
 
     suspend fun logout() {

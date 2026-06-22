@@ -19,9 +19,22 @@
         android:theme="@style/Theme.ConnectChat"
         android:usesCleartextTraffic="true">
 
+        <service
+            android:name=".data.service.ConnectChatFcmService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".data.service.NotificationReplyReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.ConnectChat"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

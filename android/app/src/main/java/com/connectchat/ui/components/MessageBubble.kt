@@ -270,10 +270,10 @@ fun MessageBubble(
                 )
                 if (isOwn) {
                     Icon(
-                        imageVector = Icons.Default.DoneAll,
-                        contentDescription = "Read",
+                        imageVector = if (message.isRead) Icons.Default.DoneAll else Icons.Default.Done,
+                        contentDescription = if (message.isRead) "Read" else "Sent",
                         modifier = Modifier.size(14.dp),
-                        tint = Accent
+                        tint = if (message.isRead) Accent else Color.Black.copy(alpha = 0.4f)
                     )
                 }
             }

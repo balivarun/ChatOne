@@ -1,5 +1,7 @@
 package com.connectchat.data.api.model
 
+import com.google.gson.annotations.SerializedName
+
 enum class MessageType { TEXT, IMAGE, FILE, VOICE, SYSTEM }
 
 data class Attachment(
@@ -17,8 +19,8 @@ data class Message(
     val content: String?,
     val type: MessageType,
     val replyTo: Message?,
-    val isEdited: Boolean,
-    val isDeleted: Boolean,
+    @SerializedName("edited") val isEdited: Boolean,
+    @SerializedName("deleted") val isDeleted: Boolean,
     val attachments: List<Attachment>,
     val readBy: List<User>,
     val createdAt: String,

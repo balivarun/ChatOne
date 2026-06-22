@@ -1,5 +1,6 @@
 package com.connectchat
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -7,8 +8,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.flow.map
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,13 +30,13 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var userPreferences: UserPreferences
 
+    private val pendingConversationId = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingConversationId.value = intent.getStringExtra("conversationId")
         enableEdgeToEdge()
         setContent {
-            // null = DataStore not yet read (show loading)
-            // ""  = DataStore read, no token stored (go to Login)
-            // non-empty = has token (go to ChatList)
             val token by userPreferences.accessToken
                 .map { it ?: "" }
                 .collectAsState(initial = null)
@@ -55,6 +58,17 @@ class MainActivity : ComponentActivity() {
                         } else {
                             Screen.Login.route
                         }
+
+                        LaunchedEffect(pendingConversationId.value) {
+                            val convId = pendingConversationId.value ?: return@LaunchedEffect
+                            if (token!!.isNotBlank()) {
+                                pendingConversationId.value = null
+                                navController.navigate(Screen.Chat.createRoute(convId)) {
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
+
                         NavGraph(
                             navController = navController,
                             startDestination = startDest
@@ -63,5 +77,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingConversationId.value = intent.getStringExtra("conversationId")
     }
 }

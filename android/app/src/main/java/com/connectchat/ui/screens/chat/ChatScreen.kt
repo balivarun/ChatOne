@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEmotions
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,9 +44,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +63,11 @@ import com.connectchat.ui.components.TypingIndicator
 import com.connectchat.ui.components.UserAvatar
 import com.connectchat.ui.theme.Accent
 import com.connectchat.ui.theme.ChatBgLight
+import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,12 +80,23 @@ fun ChatScreen(
     val lazyPagingMessages = viewModel.messages.collectAsLazyPagingItems()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var messageInput by remember { mutableStateOf("") }
+
+    val showScrollToBottom by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 3 }
+    }
 
     LaunchedEffect(viewModel.errorMessage) {
         viewModel.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
+        }
+    }
+
+    LaunchedEffect(lazyPagingMessages.itemCount) {
+        if (listState.firstVisibleItemIndex <= 1 && lazyPagingMessages.itemCount > 0) {
+            listState.animateScrollToItem(0)
         }
     }
 
@@ -91,6 +112,7 @@ fun ChatScreen(
         else -> null
     }
     val isOnline = conversation?.otherUser?.isOnline ?: false
+    val lastSeen = conversation?.otherUser?.lastSeen
     val groupId = conversation?.group?.id
 
     Scaffold(
@@ -108,10 +130,19 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(otherUserName, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                            if (isOnline) {
-                                Text("Online", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
-                            } else if (viewModel.typingUsers.isNotEmpty()) {
-                                Text("typing...", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
+                            val subtitle = when {
+                                viewModel.typingUsers.isNotEmpty() -> "typing..."
+                                isOnline -> "Online"
+                                lastSeen != null -> formatLastSeen(lastSeen)
+                                groupId != null -> null
+                                else -> null
+                            }
+                            if (subtitle != null) {
+                                Text(
+                                    text = subtitle,
+                                    color = Color.White.copy(alpha = 0.8f),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
                         }
                     }
@@ -143,92 +174,110 @@ fun ChatScreen(
                 .background(ChatBgLight)
                 .imePadding()
         ) {
-            // Messages list
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                reverseLayout = true,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                items(
-                    count = lazyPagingMessages.itemCount,
-                    key = lazyPagingMessages.itemKey { it.id }
-                ) { index ->
-                    val message = lazyPagingMessages[index]
-                    if (message != null) {
-                        MessageBubble(
-                            message = message,
-                            isOwn = message.senderId == viewModel.currentUserId,
-                            onReply = {
-                                val msg = com.connectchat.data.api.model.Message(
-                                    id = message.id,
-                                    conversationId = message.conversationId,
-                                    sender = com.connectchat.data.api.model.User(
-                                        id = message.senderId,
-                                        email = "",
-                                        displayName = message.senderName,
-                                        avatarUrl = message.senderAvatar,
-                                        bio = null,
-                                        isOnline = false,
-                                        lastSeen = null,
-                                        createdAt = ""
-                                    ),
-                                    content = message.content,
-                                    type = runCatching {
-                                        com.connectchat.data.api.model.MessageType.valueOf(message.type)
-                                    }.getOrDefault(com.connectchat.data.api.model.MessageType.TEXT),
-                                    replyTo = null,
-                                    isEdited = message.isEdited,
-                                    isDeleted = message.isDeleted,
-                                    attachments = emptyList(),
-                                    readBy = emptyList(),
-                                    createdAt = message.createdAt,
-                                    updatedAt = message.updatedAt
-                                )
-                                viewModel.setReplyTo(msg)
-                            },
-                            onEdit = {
-                                val msg = com.connectchat.data.api.model.Message(
-                                    id = message.id,
-                                    conversationId = message.conversationId,
-                                    sender = com.connectchat.data.api.model.User(
-                                        id = message.senderId,
-                                        email = "",
-                                        displayName = message.senderName,
-                                        avatarUrl = message.senderAvatar,
-                                        bio = null,
-                                        isOnline = false,
-                                        lastSeen = null,
-                                        createdAt = ""
-                                    ),
-                                    content = message.content,
-                                    type = runCatching {
-                                        com.connectchat.data.api.model.MessageType.valueOf(message.type)
-                                    }.getOrDefault(com.connectchat.data.api.model.MessageType.TEXT),
-                                    replyTo = null,
-                                    isEdited = message.isEdited,
-                                    isDeleted = message.isDeleted,
-                                    attachments = emptyList(),
-                                    readBy = emptyList(),
-                                    createdAt = message.createdAt,
-                                    updatedAt = message.updatedAt
-                                )
-                                viewModel.setEditing(msg)
-                                messageInput = message.content ?: ""
-                            },
-                            onDelete = { viewModel.deleteMessage(message.id) },
-                            onCopy = { }
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    reverseLayout = true,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(
+                        count = lazyPagingMessages.itemCount,
+                        key = lazyPagingMessages.itemKey { it.id }
+                    ) { index ->
+                        val message = lazyPagingMessages[index]
+                        if (message != null) {
+                            MessageBubble(
+                                message = message,
+                                isOwn = message.senderId == viewModel.currentUserId,
+                                onReply = {
+                                    val msg = com.connectchat.data.api.model.Message(
+                                        id = message.id,
+                                        conversationId = message.conversationId,
+                                        sender = com.connectchat.data.api.model.User(
+                                            id = message.senderId,
+                                            email = "",
+                                            displayName = message.senderName,
+                                            avatarUrl = message.senderAvatar,
+                                            bio = null,
+                                            isOnline = false,
+                                            lastSeen = null,
+                                            createdAt = ""
+                                        ),
+                                        content = message.content,
+                                        type = runCatching {
+                                            com.connectchat.data.api.model.MessageType.valueOf(message.type)
+                                        }.getOrDefault(com.connectchat.data.api.model.MessageType.TEXT),
+                                        replyTo = null,
+                                        isEdited = message.isEdited,
+                                        isDeleted = message.isDeleted,
+                                        attachments = emptyList(),
+                                        readBy = emptyList(),
+                                        createdAt = message.createdAt,
+                                        updatedAt = message.updatedAt
+                                    )
+                                    viewModel.setReplyTo(msg)
+                                },
+                                onEdit = {
+                                    val msg = com.connectchat.data.api.model.Message(
+                                        id = message.id,
+                                        conversationId = message.conversationId,
+                                        sender = com.connectchat.data.api.model.User(
+                                            id = message.senderId,
+                                            email = "",
+                                            displayName = message.senderName,
+                                            avatarUrl = message.senderAvatar,
+                                            bio = null,
+                                            isOnline = false,
+                                            lastSeen = null,
+                                            createdAt = ""
+                                        ),
+                                        content = message.content,
+                                        type = runCatching {
+                                            com.connectchat.data.api.model.MessageType.valueOf(message.type)
+                                        }.getOrDefault(com.connectchat.data.api.model.MessageType.TEXT),
+                                        replyTo = null,
+                                        isEdited = message.isEdited,
+                                        isDeleted = message.isDeleted,
+                                        attachments = emptyList(),
+                                        readBy = emptyList(),
+                                        createdAt = message.createdAt,
+                                        updatedAt = message.updatedAt
+                                    )
+                                    viewModel.setEditing(msg)
+                                    messageInput = message.content ?: ""
+                                },
+                                onDelete = { viewModel.deleteMessage(message.id) },
+                                onCopy = { }
+                            )
+                        }
+                    }
+                }
+
+                if (showScrollToBottom) {
+                    FloatingActionButton(
+                        onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = 8.dp)
+                            .size(40.dp),
+                        containerColor = Accent,
+                        shape = CircleShape
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowDownward,
+                            contentDescription = "Scroll to bottom",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
             }
 
-            // Typing indicator
             if (viewModel.typingUsers.isNotEmpty()) {
                 TypingIndicator(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             }
 
-            // Reply preview bar
             viewModel.replyToMessage?.let { replyMsg ->
                 Row(
                     modifier = Modifier
@@ -258,7 +307,6 @@ fun ChatScreen(
                 Divider()
             }
 
-            // Edit mode indicator
             viewModel.editingMessage?.let {
                 Row(
                     modifier = Modifier
@@ -283,7 +331,6 @@ fun ChatScreen(
                 Divider()
             }
 
-            // Input bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -292,7 +339,11 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { }) {
-                    Icon(Icons.Default.EmojiEmotions, contentDescription = "Emoji", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Icon(
+                        Icons.Default.EmojiEmotions,
+                        contentDescription = "Emoji",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
                 }
                 OutlinedTextField(
                     value = messageInput,
@@ -313,7 +364,11 @@ fun ChatScreen(
                     maxLines = 5
                 )
                 IconButton(onClick = { }) {
-                    Icon(Icons.Default.AttachFile, contentDescription = "Attach", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Icon(
+                        Icons.Default.AttachFile,
+                        contentDescription = "Attach",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
                 }
                 if (messageInput.isNotBlank()) {
                     IconButton(
@@ -324,6 +379,7 @@ fun ChatScreen(
                                     viewModel.editMessage(text)
                                 } else {
                                     viewModel.sendMessage(text)
+                                    scope.launch { listState.animateScrollToItem(0) }
                                 }
                                 messageInput = ""
                                 viewModel.sendTyping(false)
@@ -332,7 +388,11 @@ fun ChatScreen(
                         enabled = !viewModel.isSending
                     ) {
                         if (viewModel.isSending) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = Accent)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                                color = Accent
+                            )
                         } else {
                             Icon(Icons.Default.Send, contentDescription = "Send", tint = Accent)
                         }
@@ -341,4 +401,24 @@ fun ChatScreen(
             }
         }
     }
+}
+
+private fun formatLastSeen(isoString: String): String {
+    return runCatching {
+        val instant = Instant.parse(isoString)
+        val now = Instant.now()
+        val minutesAgo = ChronoUnit.MINUTES.between(instant, now)
+        val hoursAgo = ChronoUnit.HOURS.between(instant, now)
+        val daysAgo = ChronoUnit.DAYS.between(
+            instant.atZone(ZoneId.systemDefault()).toLocalDate(),
+            now.atZone(ZoneId.systemDefault()).toLocalDate()
+        )
+        when {
+            minutesAgo < 1 -> "last seen just now"
+            minutesAgo < 60 -> "last seen $minutesAgo min ago"
+            hoursAgo < 24 -> "last seen ${DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(instant)}"
+            daysAgo == 1L -> "last seen yesterday"
+            else -> "last seen ${DateTimeFormatter.ofPattern("dd MMM").withZone(ZoneId.systemDefault()).format(instant)}"
+        }
+    }.getOrDefault("")
 }

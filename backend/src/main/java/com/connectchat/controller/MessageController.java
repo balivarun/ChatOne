@@ -46,7 +46,7 @@ public class MessageController {
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID id) {
         messageService.deleteMessage(id, principal.getId());
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).body(ApiResponse.success("Message deleted", null));
+        return ResponseEntity.ok(ApiResponse.success("Message deleted", null));
     }
 
     @PostMapping("/{id}/forward")

@@ -30,6 +30,14 @@ public class UserService {
     private final BlockedUserRepository blockedUserRepository;
     private final FileService fileService;
 
+    @Transactional
+    public void updateFcmToken(UUID userId, String token) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        user.setFcmToken(token);
+        userRepository.save(user);
+    }
+
     @Transactional(readOnly = true)
     public UserResponse getCurrentUser(UUID userId) {
         User user = userRepository.findById(userId)

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1032865329673",
+    "project_id": "chatone-f3100",
+    "storage_bucket": "chatone-f3100.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1032865329673:android:c799dbbf17ac48e36e7ed8",
+        "android_client_info": {
+          "package_name": "com.connectchat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOiNkVE0C7y28c3VU94-9A2vUDvVuXpG0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

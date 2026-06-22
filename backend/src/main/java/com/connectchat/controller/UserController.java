@@ -1,5 +1,6 @@
 package com.connectchat.controller;
 
+import com.connectchat.dto.request.FcmTokenRequest;
 import com.connectchat.dto.request.UpdateProfileRequest;
 import com.connectchat.dto.response.ApiResponse;
 import com.connectchat.dto.response.PageResponse;
@@ -78,6 +79,14 @@ public class UserController {
             @PathVariable UUID id) {
         userService.unblockUser(principal.getId(), id);
         return ResponseEntity.ok(ApiResponse.success("User unblocked", null));
+    }
+
+    @PutMapping("/me/fcm-token")
+    public ResponseEntity<ApiResponse<Void>> updateFcmToken(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody FcmTokenRequest req) {
+        userService.updateFcmToken(principal.getId(), req.getToken());
+        return ResponseEntity.ok(ApiResponse.success("FCM token updated", null));
     }
 
     @GetMapping("/blocked")

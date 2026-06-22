@@ -17,6 +17,7 @@ data class MessageEntity(
     val replyToSenderName: String?,
     val isEdited: Boolean,
     val isDeleted: Boolean,
+    val isRead: Boolean,
     val createdAt: String,
     val updatedAt: String
 )
