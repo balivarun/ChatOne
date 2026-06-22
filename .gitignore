@@ -7,8 +7,10 @@
 backend/build/
 backend/.gradle/
 backend/bin/
-*.jar
 *.war
+# Ignore JARs except the Gradle wrapper (needed for Docker builds)
+*.jar
+!backend/gradle/wrapper/gradle-wrapper.jar
 
 # Frontend build artifacts
 frontend/.next/
