@@ -66,7 +66,7 @@ public class NotificationService {
 
         try {
             messagingTemplate.convertAndSendToUser(
-                    recipientId.toString(),
+                    recipient.getEmail(),
                     "/queue/notifications",
                     response);
         } catch (Exception e) {

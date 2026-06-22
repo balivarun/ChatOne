@@ -196,7 +196,7 @@ public class MessageService {
                     .filter(p -> !p.getUser().getId().equals(senderId))
                     .forEach(p -> {
                         messagingTemplate.convertAndSendToUser(
-                                p.getUser().getId().toString(),
+                                p.getUser().getEmail(),
                                 "/queue/messages",
                                 response);
                     });

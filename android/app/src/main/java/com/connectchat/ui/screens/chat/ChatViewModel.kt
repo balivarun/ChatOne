@@ -67,6 +67,7 @@ class ChatViewModel @Inject constructor(
                 stompClient.connect(BuildConfig.BASE_URL, token)
             }
             stompClient.subscribe("/topic/conversation/$conversationId")
+            stompClient.subscribe("/user/queue/messages")
             stompClient.subscribe("/user/queue/typing")
             observeFrames()
         }
