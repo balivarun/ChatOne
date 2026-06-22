@@ -1,0 +1,62 @@
+services:
+  - type: web
+    name: connectchat-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      # Database — auto-wired from the managed Postgres below
+      - key: DB_URL
+        fromDatabase:
+          name: connectchat-db
+          property: connectionString
+      - key: DB_USERNAME
+        fromDatabase:
+          name: connectchat-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: connectchat-db
+          property: password
+
+      # Redis — set REDIS_URL manually from Upstash (rediss://...)
+      - key: REDIS_URL
+        sync: false
+
+      # Google OAuth — from Google Cloud Console
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # JWT — run: openssl rand -base64 64
+      - key: JWT_SECRET
+        sync: false
+
+      # Cloudinary
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      # Firebase push notifications — paste service account JSON content
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+
+      # URLs — Render injects RENDER_EXTERNAL_URL automatically; set these after first deploy
+      - key: BACKEND_URL
+        sync: false
+      - key: FRONTEND_URL
+        value: https://connectchat-backend.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        value: "*"
+
+databases:
+  - name: connectchat-db
+    plan: free
+    databaseName: connectchat
+    user: connectchat

@@ -31,10 +31,24 @@ android {
         buildConfigField("String", "WEB_CLIENT_ID", "\"$webClientId\"")
     }
 
+    signingConfigs {
+        create("release") {
+            val storeFile = localProps.getProperty("STORE_FILE")
+            if (storeFile != null) {
+                this.storeFile = rootProject.file(storeFile)
+                this.storePassword = localProps.getProperty("STORE_PASSWORD")
+                this.keyAlias = localProps.getProperty("KEY_ALIAS")
+                this.keyPassword = localProps.getProperty("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

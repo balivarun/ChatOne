@@ -1,6 +1,5 @@
 package com.connectchat.service;
 
-import com.connectchat.entity.User;
 import com.connectchat.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,30 +25,39 @@ public class OnlineStatusService {
     private final UserRepository userRepository;
 
     public void setUserOnline(UUID userId) {
-        String key = ONLINE_KEY_PREFIX + userId.toString();
-        stringRedisTemplate.opsForValue().set(key, "1", ONLINE_TTL_MINUTES, TimeUnit.MINUTES);
+        try {
+            stringRedisTemplate.opsForValue().set(
+                    ONLINE_KEY_PREFIX + userId, "1", ONLINE_TTL_MINUTES, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.warn("Redis unavailable, skipping online status set for {}", userId);
+        }
         userRepository.findById(userId).ifPresent(user -> {
             user.setIsOnline(true);
             userRepository.save(user);
         });
-        log.debug("User {} is now online", userId);
     }
 
     @Transactional
     public void setUserOffline(UUID userId) {
-        String key = ONLINE_KEY_PREFIX + userId.toString();
-        stringRedisTemplate.delete(key);
+        try {
+            stringRedisTemplate.delete(ONLINE_KEY_PREFIX + userId);
+        } catch (Exception e) {
+            log.warn("Redis unavailable, skipping online status delete for {}", userId);
+        }
         userRepository.findById(userId).ifPresent(user -> {
             user.setIsOnline(false);
             user.setLastSeen(Instant.now());
             userRepository.save(user);
         });
-        log.debug("User {} is now offline", userId);
     }
 
     public boolean isUserOnline(UUID userId) {
-        String key = ONLINE_KEY_PREFIX + userId.toString();
-        return Boolean.TRUE.equals(stringRedisTemplate.hasKey(key));
+        try {
+            return Boolean.TRUE.equals(stringRedisTemplate.hasKey(ONLINE_KEY_PREFIX + userId));
+        } catch (Exception e) {
+            log.warn("Redis unavailable, defaulting isOnline=false for {}", userId);
+            return false;
+        }
     }
 
     public List<UUID> getOnlineUsers(List<UUID> userIds) {
@@ -59,9 +67,13 @@ public class OnlineStatusService {
     }
 
     public void refreshOnlineStatus(UUID userId) {
-        String key = ONLINE_KEY_PREFIX + userId.toString();
-        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
-            stringRedisTemplate.expire(key, ONLINE_TTL_MINUTES, TimeUnit.MINUTES);
+        try {
+            String key = ONLINE_KEY_PREFIX + userId;
+            if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+                stringRedisTemplate.expire(key, ONLINE_TTL_MINUTES, TimeUnit.MINUTES);
+            }
+        } catch (Exception e) {
+            log.warn("Redis unavailable, skipping online status refresh for {}", userId);
         }
     }
 }

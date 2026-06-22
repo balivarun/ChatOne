@@ -42,3 +42,7 @@ logs/
 # Firebase credentials (keep locally, never commit)
 backend/src/main/resources/*-firebase-adminsdk-*.json
 backend/src/main/resources/firebase-service-account*.json
+
+# Android signing keystore (keep locally, never commit)
+android/*.jks
+android/*.keystore
