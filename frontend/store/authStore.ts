@@ -34,6 +34,8 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         try {
           const { data } = await authApi.getMe();
+          const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+          if (token) connectWebSocket(token);
           set({ user: data.data, isAuthenticated: true });
         } catch {
           set({ isAuthenticated: false });

@@ -9,7 +9,7 @@ export interface User {
   createdAt: string;
 }
 
-export type MessageType = 'TEXT' | 'IMAGE' | 'FILE' | 'VOICE' | 'SYSTEM';
+export type MessageType = 'TEXT' | 'IMAGE' | 'FILE' | 'VOICE' | 'SYSTEM' | 'STICKER';
 export type ConversationType = 'DIRECT' | 'GROUP';
 export type NotificationType =
   | 'NEW_MESSAGE'

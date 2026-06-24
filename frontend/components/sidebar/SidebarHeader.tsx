@@ -13,6 +13,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import UserAvatar from '@/components/common/UserAvatar';
 import ThemeToggle from '@/components/common/ThemeToggle';
+import NotificationPanel from '@/components/common/NotificationPanel';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +30,7 @@ export default function SidebarHeader() {
   const { unreadCount } = useNotificationStore();
   const router = useRouter();
   const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -71,20 +73,25 @@ export default function SidebarHeader() {
           <MessageSquarePlus className="h-5 w-5" />
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative"
-          onClick={() => router.push('/settings')}
-          title="Notifications"
-        >
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-accent text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            onClick={() => setShowNotifications((v) => !v)}
+            title="Notifications"
+          >
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-accent text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </Button>
+          {showNotifications && (
+            <NotificationPanel onClose={() => setShowNotifications(false)} />
           )}
-        </Button>
+        </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

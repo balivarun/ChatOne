@@ -183,8 +183,15 @@ export default function MessageBubble({
             </div>
           )}
 
+          {/* Sticker */}
+          {message.type === 'STICKER' && message.content && (
+            <div className="px-3 py-2">
+              <span style={{ fontSize: '64px', lineHeight: 1 }}>{message.content}</span>
+            </div>
+          )}
+
           {/* Text content */}
-          {message.content && (
+          {message.type !== 'STICKER' && message.content && (
             <div className="px-3 py-2">
               <p className="text-sm whitespace-pre-wrap break-words">
                 {message.content}

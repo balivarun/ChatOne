@@ -17,4 +17,10 @@ public class SendMessageRequest {
     private MessageType type = MessageType.TEXT;
 
     private UUID replyToId;
+
+    // Populated from /api/files/upload response
+    private String attachmentUrl;
+    private String attachmentFileName;
+    private String attachmentFileType;
+    private Long attachmentFileSize;
 }

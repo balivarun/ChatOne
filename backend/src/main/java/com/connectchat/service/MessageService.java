@@ -35,6 +35,7 @@ public class MessageService {
     private final ConversationParticipantRepository participantRepository;
     private final MessageReadRepository messageReadRepository;
     private final UserRepository userRepository;
+    private final AttachmentRepository attachmentRepository;
     private final NotificationService notificationService;
     private final SimpMessagingTemplate messagingTemplate;
     private final UserService userService;
@@ -69,6 +70,18 @@ public class MessageService {
                 .build();
 
         Message saved = messageRepository.save(message);
+
+        if (req.getAttachmentUrl() != null && !req.getAttachmentUrl().isBlank()) {
+            Attachment attachment = Attachment.builder()
+                    .message(saved)
+                    .url(req.getAttachmentUrl())
+                    .fileName(req.getAttachmentFileName())
+                    .fileType(req.getAttachmentFileType())
+                    .fileSize(req.getAttachmentFileSize())
+                    .build();
+            attachmentRepository.save(attachment);
+        }
+
         MessageResponse response = mapToMessageResponse(saved);
 
         broadcastMessage(conversation, senderId, response);

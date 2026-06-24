@@ -90,6 +90,10 @@ export const messageApi = {
     content?: string;
     type?: string;
     replyToId?: string;
+    attachmentUrl?: string;
+    attachmentFileName?: string;
+    attachmentFileType?: string;
+    attachmentFileSize?: number;
   }) => api.post('/messages', data),
   edit: (id: string, content: string) => api.put(`/messages/${id}`, { content }),
   delete: (id: string) => api.delete(`/messages/${id}`),

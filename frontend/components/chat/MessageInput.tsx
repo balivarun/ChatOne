@@ -1,14 +1,14 @@
 'use client';
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useDropzone } from 'react-dropzone';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import { Send, Paperclip, Smile, X } from 'lucide-react';
+import { Send, Paperclip, Smile, X, Image as ImageIcon, Sticker } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Message } from '@/types';
 import { messageApi, fileApi } from '@/lib/api';
 import { useChatStore } from '@/store/chatStore';
 import { sendMessage as wsSend } from '@/lib/websocket';
 import { useAuthStore } from '@/store/authStore';
+import StickerPicker from './StickerPicker';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -26,9 +26,12 @@ export default function MessageInput({
 }: Props) {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showSticker, setShowSticker] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { addMessage } = useChatStore();
   const { user } = useAuthStore();
@@ -40,18 +43,11 @@ export default function MessageInput({
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
   };
 
-  useEffect(() => {
-    adjustHeight();
-  }, [text]);
+  useEffect(() => { adjustHeight(); }, [text]);
 
   const sendTyping = useCallback(
     (isTyping: boolean) => {
-      wsSend('/app/chat.typing', {
-        conversationId,
-        userId: user?.id,
-        displayName: user?.displayName,
-        isTyping,
-      });
+      wsSend('/app/chat.typing', { conversationId, userId: user?.id, displayName: user?.displayName, isTyping });
     },
     [conversationId, user]
   );
@@ -65,18 +61,12 @@ export default function MessageInput({
 
   const handleSend = async () => {
     const content = text.trim();
-    if (!content && !uploading) return;
+    if (!content) return;
     if (sending) return;
     setSending(true);
     try {
-      const { data } = await messageApi.send({
-        conversationId,
-        content,
-        type: 'TEXT',
-        replyToId: replyTo?.id,
-      });
-      const msg = data.data || data;
-      addMessage(msg);
+      const { data } = await messageApi.send({ conversationId, content, type: 'TEXT', replyToId: replyTo?.id });
+      addMessage(data.data || data);
       setText('');
       onClearReply?.();
       sendTyping(false);
@@ -88,10 +78,7 @@ export default function MessageInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
@@ -100,21 +87,33 @@ export default function MessageInput({
     textareaRef.current?.focus();
   };
 
-  const onDrop = useCallback(
-    async (acceptedFiles: File[]) => {
-      if (acceptedFiles.length === 0) return;
+  const handleStickerSelect = async (sticker: string) => {
+    setShowSticker(false);
+    try {
+      const { data } = await messageApi.send({ conversationId, content: sticker, type: 'STICKER', replyToId: replyTo?.id });
+      addMessage(data.data || data);
+      onClearReply?.();
+    } catch {
+      toast.error('Failed to send sticker');
+    }
+  };
+
+  const uploadAndSend = useCallback(
+    async (file: File) => {
       setUploading(true);
       try {
-        for (const file of acceptedFiles) {
-          await fileApi.upload(file);
-          const { data } = await messageApi.send({
-            conversationId,
-            type: file.type.startsWith('image/') ? 'IMAGE' : 'FILE',
-            replyToId: replyTo?.id,
-          });
-          const msg = data.data || data;
-          addMessage(msg);
-        }
+        const uploadRes = await fileApi.upload(file);
+        const att = uploadRes.data?.data || uploadRes.data;
+        const { data } = await messageApi.send({
+          conversationId,
+          type: file.type.startsWith('image/') ? 'IMAGE' : 'FILE',
+          replyToId: replyTo?.id,
+          attachmentUrl: att.url,
+          attachmentFileName: att.fileName || file.name,
+          attachmentFileType: att.fileType || file.type,
+          attachmentFileSize: att.fileSize || file.size,
+        });
+        addMessage(data.data || data);
         onClearReply?.();
       } catch {
         toast.error('Failed to upload file');
@@ -125,23 +124,23 @@ export default function MessageInput({
     [conversationId, replyTo, addMessage, onClearReply]
   );
 
-  const { getInputProps, open: openDropzone } = useDropzone({
-    onDrop,
-    noClick: true,
-    noKeyboard: true,
-  });
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadAndSend(file);
+    e.target.value = '';
+  };
 
   return (
     <div className="relative">
-      <input {...getInputProps()} />
+      {/* Hidden file inputs */}
+      <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
+      <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
       {/* Reply preview */}
       {replyTo && (
         <div className="flex items-center gap-2 px-4 py-2 bg-sidebar border-t border-black/10 dark:border-white/10">
           <div className="flex-1 pl-2 border-l-2 border-accent">
-            <p className="text-xs font-medium text-accent">
-              {replyTo.sender.displayName}
-            </p>
+            <p className="text-xs font-medium text-accent">{replyTo.sender.displayName}</p>
             <p className="text-xs text-gray-500 truncate">
               {replyTo.isDeleted ? 'Deleted message' : replyTo.content || 'Attachment'}
             </p>
@@ -152,15 +151,10 @@ export default function MessageInput({
         </div>
       )}
 
-      <div className="flex items-end gap-2 px-3 py-2 bg-sidebar border-t border-black/10 dark:border-white/10">
-        {/* Emoji picker */}
+      <div className="flex items-end gap-1 px-2 py-2 bg-sidebar border-t border-black/10 dark:border-white/10">
+        {/* Emoji */}
         <div className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="flex-shrink-0"
-            onClick={() => setShowEmoji((v) => !v)}
-          >
+          <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => { setShowEmoji((v) => !v); setShowSticker(false); }}>
             <Smile className="h-5 w-5" />
           </Button>
           {showEmoji && (
@@ -170,14 +164,25 @@ export default function MessageInput({
           )}
         </div>
 
+        {/* Sticker */}
+        <div className="relative">
+          <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => { setShowSticker((v) => !v); setShowEmoji(false); }} title="Stickers">
+            <Sticker className="h-5 w-5" />
+          </Button>
+          {showSticker && (
+            <div className="absolute bottom-full left-0 mb-2 z-50">
+              <StickerPicker onSelect={handleStickerSelect} />
+            </div>
+          )}
+        </div>
+
+        {/* Photo */}
+        <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => photoInputRef.current?.click()} disabled={uploading} title="Send photo">
+          <ImageIcon className="h-5 w-5" />
+        </Button>
+
         {/* File attachment */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="flex-shrink-0"
-          onClick={openDropzone}
-          disabled={uploading}
-        >
+        <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Attach file">
           {uploading ? (
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent" />
           ) : (
@@ -199,13 +204,13 @@ export default function MessageInput({
           />
         </div>
 
-        {/* Send button */}
+        {/* Send */}
         <Button
           variant="default"
           size="icon"
           className="flex-shrink-0 rounded-full"
           onClick={handleSend}
-          disabled={(!text.trim() && !uploading) || sending}
+          disabled={!text.trim() || sending}
         >
           {sending ? (
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
