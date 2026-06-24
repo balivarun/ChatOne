@@ -1,5 +1,9 @@
 package com.connectchat.ui.screens.chat
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.MoreVert
@@ -53,8 +58,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
@@ -64,6 +71,7 @@ import com.connectchat.ui.components.UserAvatar
 import com.connectchat.ui.theme.Accent
 import com.connectchat.ui.theme.ChatBgLight
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -81,7 +89,52 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var messageInput by remember { mutableStateOf("") }
+
+    // Camera photo URI
+    var cameraPhotoUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun readBytesFromUri(uri: Uri): Pair<ByteArray, String> {
+        val cr = context.contentResolver
+        val mimeType = cr.getType(uri) ?: "application/octet-stream"
+        val bytes = cr.openInputStream(uri)?.readBytes() ?: ByteArray(0)
+        return bytes to mimeType
+    }
+
+    // Gallery / file picker
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        val (bytes, mimeType) = readBytesFromUri(uri)
+        val fileName = uri.lastPathSegment ?: "file"
+        viewModel.sendMessageWithAttachment(bytes, fileName, mimeType)
+    }
+
+    // Camera capture
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success) {
+            cameraPhotoUri?.let { uri ->
+                val (bytes, mimeType) = readBytesFromUri(uri)
+                viewModel.sendMessageWithAttachment(bytes, "photo_${System.currentTimeMillis()}.jpg", mimeType)
+            }
+        }
+    }
+
+    // Camera permission
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted: Boolean ->
+        if (granted) {
+            val photoFile = File(context.cacheDir.also { File(it, "camera").mkdirs() }, "camera/photo_${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
+            cameraPhotoUri = uri
+            cameraLauncher.launch(uri)
+        }
+    }
 
     val showScrollToBottom by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 3 }
@@ -338,10 +391,10 @@ fun ChatScreen(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { }) {
+                IconButton(onClick = { cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA) }) {
                     Icon(
-                        Icons.Default.EmojiEmotions,
-                        contentDescription = "Emoji",
+                        Icons.Default.CameraAlt,
+                        contentDescription = "Camera",
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
@@ -363,12 +416,19 @@ fun ChatScreen(
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     maxLines = 5
                 )
-                IconButton(onClick = { }) {
-                    Icon(
-                        Icons.Default.AttachFile,
-                        contentDescription = "Attach",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
+                IconButton(
+                    onClick = { filePickerLauncher.launch("*/*") },
+                    enabled = !viewModel.isUploading
+                ) {
+                    if (viewModel.isUploading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Accent)
+                    } else {
+                        Icon(
+                            Icons.Default.AttachFile,
+                            contentDescription = "Attach",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
                 }
                 if (messageInput.isNotBlank()) {
                     IconButton(

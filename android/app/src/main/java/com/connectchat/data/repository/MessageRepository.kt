@@ -14,6 +14,9 @@ import com.connectchat.data.local.AppDatabase
 import com.connectchat.data.local.MessageDao
 import com.connectchat.data.local.MessageEntity
 import kotlinx.coroutines.flow.Flow
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -63,6 +66,17 @@ class MessageRepository @Inject constructor(
 
     suspend fun markRead(messageIds: List<String>): Result<Unit> = runCatching {
         apiService.markRead(MarkReadRequest(messageIds))
+    }
+
+    suspend fun uploadFile(bytes: ByteArray, fileName: String, mimeType: String): Result<Triple<String, String, Long>> = runCatching {
+        val requestBody = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+        val part = MultipartBody.Part.createFormData("file", fileName, requestBody)
+        val response = apiService.uploadFile(part)
+        @Suppress("UNCHECKED_CAST")
+        val data = response.data as? Map<String, Any> ?: throw Exception("Upload failed")
+        val url = data["url"] as? String ?: throw Exception("No URL returned")
+        val size = (data["fileSize"] as? Double)?.toLong() ?: bytes.size.toLong()
+        Triple(url, mimeType, size)
     }
 
     suspend fun insertMessage(message: MessageEntity) {

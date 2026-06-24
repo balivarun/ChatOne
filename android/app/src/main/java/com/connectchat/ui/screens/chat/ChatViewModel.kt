@@ -50,6 +50,7 @@ class ChatViewModel @Inject constructor(
     var editingMessage by mutableStateOf<Message?>(null)
     var typingUsers by mutableStateOf<Set<String>>(emptySet())
     var isSending by mutableStateOf(false)
+    var isUploading by mutableStateOf(false)
     var currentUserId by mutableStateOf("")
     var errorMessage by mutableStateOf<String?>(null)
 
@@ -154,6 +155,29 @@ class ChatViewModel @Inject constructor(
             messageRepository.forwardMessage(messageId, targetConversationId).onFailure {
                 errorMessage = it.message ?: "Failed to forward message"
             }
+        }
+    }
+
+    fun sendMessageWithAttachment(bytes: ByteArray, fileName: String, mimeType: String) {
+        viewModelScope.launch {
+            isUploading = true
+            messageRepository.uploadFile(bytes, fileName, mimeType).onSuccess { (url, type, size) ->
+                val msgType = if (mimeType.startsWith("image/")) "IMAGE" else "FILE"
+                messageRepository.sendMessage(
+                    SendMessageRequest(
+                        conversationId = conversationId,
+                        content = null,
+                        type = msgType,
+                        replyToId = replyToMessage?.id,
+                        attachmentUrl = url,
+                        attachmentFileName = fileName,
+                        attachmentFileType = type,
+                        attachmentFileSize = size
+                    )
+                ).onFailure { errorMessage = it.message ?: "Failed to send" }
+            }.onFailure { errorMessage = it.message ?: "Failed to upload" }
+            replyToMessage = null
+            isUploading = false
         }
     }
 

@@ -15,7 +15,11 @@ data class SendMessageRequest(
     val conversationId: String,
     val content: String?,
     val type: String = "TEXT",
-    val replyToId: String? = null
+    val replyToId: String? = null,
+    val attachmentUrl: String? = null,
+    val attachmentFileName: String? = null,
+    val attachmentFileType: String? = null,
+    val attachmentFileSize: Long? = null
 )
 
 data class EditMessageRequest(val content: String)
