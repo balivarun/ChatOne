@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { Send, Paperclip, Smile, X, Image as ImageIcon, Sticker } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,8 +30,8 @@ export default function MessageInput({
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const fileInputId = `file-input-${conversationId}`;
+  const photoInputId = `photo-input-${conversationId}`;
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { addMessage } = useChatStore();
   const { user } = useAuthStore();
@@ -133,8 +133,8 @@ export default function MessageInput({
   return (
     <div className="relative">
       {/* Hidden file inputs */}
-      <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
-      <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+      <input id={fileInputId} type="file" className="hidden" onChange={handleFileChange} />
+      <input id={photoInputId} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
       {/* Reply preview */}
       {replyTo && (
@@ -177,18 +177,18 @@ export default function MessageInput({
         </div>
 
         {/* Photo */}
-        <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => photoInputRef.current?.click()} disabled={uploading} title="Send photo">
+        <label htmlFor={photoInputId} className={`cursor-pointer inline-flex items-center justify-center h-9 w-9 rounded-md hover:bg-accent/10 transition-colors flex-shrink-0 ${uploading ? 'opacity-50 pointer-events-none' : ''}`} title="Send photo">
           <ImageIcon className="h-5 w-5" />
-        </Button>
+        </label>
 
         {/* File attachment */}
-        <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Attach file">
+        <label htmlFor={fileInputId} className={`cursor-pointer inline-flex items-center justify-center h-9 w-9 rounded-md hover:bg-accent/10 transition-colors flex-shrink-0 ${uploading ? 'opacity-50 pointer-events-none' : ''}`} title="Attach file">
           {uploading ? (
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent" />
           ) : (
             <Paperclip className="h-5 w-5" />
           )}
-        </Button>
+        </label>
 
         {/* Text area */}
         <div className="flex-1 relative">
