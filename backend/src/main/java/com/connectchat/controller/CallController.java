@@ -23,7 +23,11 @@ public class CallController {
     public void offer(@Payload Map<String, Object> payload,
                       @AuthenticationPrincipal UserPrincipal caller) {
         String targetEmail = (String) payload.get("targetEmail");
-        if (targetEmail == null) return;
+        log.info("CALL_OFFER from={} to={} type={}", caller != null ? caller.getEmail() : "null", targetEmail, payload.get("callType"));
+        if (targetEmail == null || targetEmail.isBlank()) {
+            log.warn("CALL_OFFER rejected — targetEmail is null/blank");
+            return;
+        }
         messagingTemplate.convertAndSendToUser(targetEmail, "/queue/call",
                 Map.of("type", "CALL_OFFER",
                        "callerId", caller.getId().toString(),

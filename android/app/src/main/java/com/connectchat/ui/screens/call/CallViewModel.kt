@@ -19,6 +19,7 @@ class CallViewModel @Inject constructor(
 
     val callState: StateFlow<CallState> = callManager.callState
     val remoteVideoTrack: StateFlow<VideoTrack?> = callManager.remoteVideoTrack
+    val callStatus: StateFlow<String> = callManager.callStatus
 
     var isMicOn by mutableStateOf(true)
     var isCameraOn by mutableStateOf(true)

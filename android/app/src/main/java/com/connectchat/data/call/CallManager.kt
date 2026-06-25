@@ -6,6 +6,7 @@ import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,9 +52,12 @@ class CallManager @Inject constructor(
     private val _callState = MutableStateFlow<CallState>(CallState.Idle)
     val callState: StateFlow<CallState> = _callState.asStateFlow()
 
-    // Holds remote video/audio tracks so the CallScreen can render them
     private val _remoteVideoTrack = MutableStateFlow<VideoTrack?>(null)
     val remoteVideoTrack: StateFlow<VideoTrack?> = _remoteVideoTrack.asStateFlow()
+
+    /** Human-readable status shown in the calling screen (e.g. "Connecting…", "Ringing…") */
+    private val _callStatus = MutableStateFlow("Calling…")
+    val callStatus: StateFlow<String> = _callStatus.asStateFlow()
 
     private var peerEmail: String = ""
     private var _pendingSdp: SessionDescription? = null
@@ -87,14 +91,16 @@ class CallManager @Inject constructor(
                         is CallState.Incoming -> s.callType
                         else -> "video"
                     }
+                    _callStatus.value = "Connected"
                     _callState.value = CallState.Active(type)
                 }
                 PeerConnection.IceConnectionState.DISCONNECTED,
                 PeerConnection.IceConnectionState.FAILED,
                 PeerConnection.IceConnectionState.CLOSED -> {
                     _callState.value = CallState.Idle
-                    webRtcManager.dispose()
                     _remoteVideoTrack.value = null
+                    _callStatus.value = "Calling…"
+                    scope.launch { webRtcManager.dispose() }
                 }
                 else -> Unit
             }
@@ -133,17 +139,30 @@ class CallManager @Inject constructor(
         if (_callState.value !is CallState.Outgoing) return
         val outgoing = _callState.value as CallState.Outgoing
         scope.launch {
+            _callStatus.value = "Initializing…"
             webRtcManager.init()
             if (isVideo) webRtcManager.startLocalStream(localSink)
             else webRtcManager.startAudioOnlyStream()
             webRtcManager.createPeerConnection(peerConnectionObserver)
+            _callStatus.value = "Creating offer…"
             webRtcManager.createOffer { sdp ->
-                stompClient.send("/app/call.offer", gson.toJson(mapOf(
+                val payload = gson.toJson(mapOf(
                     "targetEmail" to outgoing.targetEmail,
                     "conversationId" to outgoing.conversationId,
                     "sdp" to sdp.description,
                     "callType" to outgoing.callType
-                )))
+                ))
+                var sent = stompClient.send("/app/call.offer", payload)
+                if (!sent) {
+                    // Socket may have been idle-dropped — retry once after 1s
+                    scope.launch {
+                        delay(1_000)
+                        sent = stompClient.send("/app/call.offer", payload)
+                        _callStatus.value = if (sent) "Ringing…" else "No connection — check network"
+                    }
+                } else {
+                    _callStatus.value = "Ringing…"
+                }
             }
         }
     }
@@ -180,10 +199,12 @@ class CallManager @Inject constructor(
         scope.launch { webRtcManager.dispose() }
         _callState.value = CallState.Idle
         _remoteVideoTrack.value = null
+        _callStatus.value = "Calling…"
         peerEmail = ""
     }
 
     fun onRemoteAnswer(sdp: String) {
+        _callStatus.value = "Connecting…"
         webRtcManager.setRemoteDescription(SessionDescription(SessionDescription.Type.ANSWER, sdp))
     }
 
@@ -195,6 +216,7 @@ class CallManager @Inject constructor(
         scope.launch { webRtcManager.dispose() }
         _callState.value = CallState.Idle
         _remoteVideoTrack.value = null
+        _callStatus.value = "Calling…"
         peerEmail = ""
     }
 

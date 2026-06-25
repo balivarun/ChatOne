@@ -42,6 +42,14 @@ class ChatListViewModel @Inject constructor(
     var currentUserId by mutableStateOf("")
 
     init {
+        // Collect frames immediately — SharedFlow(replay=0) drops any frame emitted
+        // while no collector is running. loadData() has async API calls that would
+        // otherwise create a gap where an incoming CALL_OFFER could be silently lost.
+        viewModelScope.launch {
+            stompClient.frames.collect { frame ->
+                if (frame is StompFrame.Message) handleIncomingFrame(frame)
+            }
+        }
         loadData()
     }
 
@@ -59,17 +67,6 @@ class ChatListViewModel @Inject constructor(
             conversationRepository.refreshConversations()
             groupRepository.getMyGroups().onSuccess { groups = it }
             isLoading = false
-            observeWebSocket()
-        }
-    }
-
-    private fun observeWebSocket() {
-        viewModelScope.launch {
-            stompClient.frames.collect { frame ->
-                if (frame is StompFrame.Message) {
-                    handleIncomingFrame(frame)
-                }
-            }
         }
     }
 

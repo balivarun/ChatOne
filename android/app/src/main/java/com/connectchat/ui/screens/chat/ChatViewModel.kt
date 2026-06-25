@@ -68,6 +68,17 @@ class ChatViewModel @Inject constructor(
     private var typingJob: Job? = null
 
     init {
+        // Collect frames immediately — SharedFlow(replay=0) drops any frame emitted
+        // while no collector is running. The data-loading coroutine below has async
+        // API calls that would otherwise create a gap where a CALL_OFFER is lost.
+        viewModelScope.launch {
+            stompClient.frames.collect { frame ->
+                when (frame) {
+                    is StompFrame.Message -> handleIncomingFrame(frame)
+                    else -> Unit
+                }
+            }
+        }
         viewModelScope.launch {
             currentUserId = userPreferences.userId.first() ?: ""
             messageRepository.loadMessages(conversationId)
@@ -83,18 +94,6 @@ class ChatViewModel @Inject constructor(
             stompClient.subscribe("/user/queue/messages")
             stompClient.subscribe("/user/queue/typing")
             stompClient.subscribe("/user/queue/call")
-            observeFrames()
-        }
-    }
-
-    private fun observeFrames() {
-        viewModelScope.launch {
-            stompClient.frames.collect { frame ->
-                when (frame) {
-                    is StompFrame.Message -> handleIncomingFrame(frame)
-                    else -> Unit
-                }
-            }
         }
     }
 

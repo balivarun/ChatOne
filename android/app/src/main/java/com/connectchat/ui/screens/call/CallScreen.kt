@@ -151,6 +151,7 @@ private fun OutgoingCallView(
     val isVideo = state.callType == "video"
     val mediaStarted = remember { mutableStateOf(false) }
     val localSinkRef = remember { mutableStateOf<SurfaceViewRenderer?>(null) }
+    val callStatus by viewModel.callStatus.collectAsState()
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A2E)),
@@ -193,7 +194,7 @@ private fun OutgoingCallView(
         ) {
             UserAvatar(avatarUrl = state.targetAvatar, displayName = state.targetName, size = 80.dp)
             Text(state.targetName, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text("Calling...", color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
+            Text(callStatus, color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
         }
 
         Row(
