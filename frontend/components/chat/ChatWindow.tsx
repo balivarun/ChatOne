@@ -48,8 +48,6 @@ export default function ChatWindow({ conversationId }: Props) {
   );
 
   useEffect(() => {
-    setPage(0);
-    setLoading(true);
     loadMessages(0).finally(() => setLoading(false));
 
     const convTopic = `/topic/conversation/${conversationId}`;

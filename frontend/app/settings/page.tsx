@@ -16,7 +16,7 @@ function SettingsPageInner() {
   const { user, logout } = useAuthStore();
   const { unreadCount, markAllRead, setUnreadCount } = useNotificationStore();
   const [blockedUsers, setBlockedUsers] = useState<User[]>([]);
-  const [loadingBlocked, setLoadingBlocked] = useState(false);
+  const [loadingBlocked, setLoadingBlocked] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
@@ -25,7 +25,6 @@ function SettingsPageInner() {
       .then(({ data }) => setUnreadCount(data.data ?? data.count ?? 0))
       .catch(() => {});
 
-    setLoadingBlocked(true);
     userApi
       .getBlockedUsers()
       .then(({ data }) => {

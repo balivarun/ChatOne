@@ -54,7 +54,6 @@ export default function GroupChatWindow({ groupId }: Props) {
       }
     };
 
-    setLoading(true);
     Promise.all([loadGroup(), loadMessages(0)]).finally(() =>
       setLoading(false)
     );
