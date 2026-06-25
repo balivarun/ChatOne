@@ -17,6 +17,11 @@ class AuthRepository @Inject constructor(
     private val apiService: ApiService,
     private val userPreferences: UserPreferences
 ) {
+    suspend fun warmUpServer(): Result<Unit> = runCatching {
+        apiService.healthCheck()
+        Unit
+    }
+
     suspend fun signInWithGoogle(idToken: String): Result<User> = runCatching {
         val response = apiService.mobileGoogleSignIn(MobileAuthRequest(idToken))
         val authData = response.data ?: throw Exception(response.message ?: "Sign in failed")

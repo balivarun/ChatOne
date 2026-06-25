@@ -13,7 +13,7 @@ import javax.inject.Inject
 
 sealed class LoginUiState {
     object Idle : LoginUiState()
-    object Loading : LoginUiState()
+    data class Loading(val message: String = "Signing in...") : LoginUiState()
     object Success : LoginUiState()
     data class Error(val message: String) : LoginUiState()
 }
@@ -26,16 +26,38 @@ class LoginViewModel @Inject constructor(
     var uiState by mutableStateOf<LoginUiState>(LoginUiState.Idle)
         private set
 
+    init {
+        // Ping the server immediately so it wakes up before the user finishes Google Sign-In
+        viewModelScope.launch {
+            runCatching { authRepository.warmUpServer() }
+        }
+    }
+
     fun signInWithGoogle(idToken: String) {
         viewModelScope.launch {
-            uiState = LoginUiState.Loading
-            authRepository.signInWithGoogle(idToken).fold(
-                onSuccess = {
+            val maxAttempts = 3
+            for (attempt in 1..maxAttempts) {
+                val statusMsg = when (attempt) {
+                    1 -> "Signing in..."
+                    2 -> "Server is starting up, retrying... (${attempt}/$maxAttempts)"
+                    else -> "Almost there, retrying... (${attempt}/$maxAttempts)"
+                }
+                uiState = LoginUiState.Loading(statusMsg)
+
+                val result = authRepository.signInWithGoogle(idToken)
+                if (result.isSuccess) {
                     uploadFcmToken()
                     uiState = LoginUiState.Success
-                },
-                onFailure = { uiState = LoginUiState.Error(it.message ?: "Sign in failed") }
-            )
+                    return@launch
+                }
+
+                if (attempt == maxAttempts) {
+                    uiState = LoginUiState.Error(
+                        "Login failed after $maxAttempts attempts. " +
+                        "The server may still be starting — please try again in a moment."
+                    )
+                }
+            }
         }
     }
 

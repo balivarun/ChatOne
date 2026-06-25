@@ -64,9 +64,7 @@ fun LoginScreen(
     }
 
     LaunchedEffect(viewModel.uiState) {
-        if (viewModel.uiState is LoginUiState.Success) {
-            onLoginSuccess()
-        }
+        if (viewModel.uiState is LoginUiState.Success) onLoginSuccess()
     }
 
     Box(
@@ -109,14 +107,16 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            val loadingState = viewModel.uiState as? LoginUiState.Loading
+
             OutlinedButton(
                 onClick = { launcher.launch(googleSignInClient.signInIntent) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                enabled = viewModel.uiState !is LoginUiState.Loading
+                enabled = loadingState == null
             ) {
-                if (viewModel.uiState is LoginUiState.Loading) {
+                if (loadingState != null) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,
@@ -124,7 +124,7 @@ fun LoginScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Signing in...",
+                        text = loadingState.message,
                         style = MaterialTheme.typography.bodyLarge
                     )
                 } else {
@@ -140,15 +140,6 @@ fun LoginScreen(
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
-            }
-
-            if (viewModel.uiState is LoginUiState.Loading) {
-                Text(
-                    text = "Server is starting up, please wait\n(this takes ~30 seconds on first launch)",
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
             }
 
             if (viewModel.uiState is LoginUiState.Error) {

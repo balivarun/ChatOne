@@ -32,6 +32,9 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface ApiService {
+    @GET("actuator/health")
+    suspend fun healthCheck(): retrofit2.Response<Unit>
+
     @POST("api/auth/google/mobile")
     suspend fun mobileGoogleSignIn(@Body request: MobileAuthRequest): ApiResponse<AuthResponse>
 
