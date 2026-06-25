@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.connectchat.BuildConfig
 import com.connectchat.data.api.model.Group
 import com.connectchat.data.api.model.Message
+import com.connectchat.data.call.CallManager
 import com.connectchat.data.local.ConversationEntity
 import com.connectchat.data.preferences.UserPreferences
 import com.connectchat.data.repository.ConversationRepository
@@ -29,6 +30,7 @@ class ChatListViewModel @Inject constructor(
     private val groupRepository: GroupRepository,
     private val userPreferences: UserPreferences,
     private val stompClient: StompClient,
+    private val callManager: CallManager,
     private val gson: Gson
 ) : ViewModel() {
 
@@ -52,6 +54,7 @@ class ChatListViewModel @Inject constructor(
                 stompClient.connect(BuildConfig.BASE_URL, token)
                 stompClient.subscribe("/user/queue/messages")
                 stompClient.subscribe("/user/queue/notifications")
+                stompClient.subscribe("/user/queue/call")
             }
             conversationRepository.refreshConversations()
             groupRepository.getMyGroups().onSuccess { groups = it }
@@ -80,6 +83,38 @@ class ChatListViewModel @Inject constructor(
                         message.content ?: "",
                         message.createdAt
                     )
+                }
+            }
+            frame.destination.contains("/queue/call") -> {
+                runCatching {
+                    @Suppress("UNCHECKED_CAST")
+                    val payload = gson.fromJson(frame.body, Map::class.java) as Map<String, Any>
+                    when (payload["type"] as? String) {
+                        "CALL_OFFER" -> {
+                            callManager.onIncomingOffer(
+                                callerId = payload["callerId"] as? String ?: "",
+                                callerName = payload["callerName"] as? String ?: "Unknown",
+                                callerAvatar = payload["callerAvatar"] as? String ?: "",
+                                callerEmail = payload["callerId"] as? String ?: "",
+                                convId = payload["conversationId"] as? String ?: "",
+                                callType = payload["callType"] as? String ?: "video",
+                                sdp = payload["sdp"] as? String ?: ""
+                            )
+                        }
+                        "CALL_ANSWER" -> {
+                            callManager.onRemoteAnswer(payload["sdp"] as? String ?: "")
+                        }
+                        "ICE_CANDIDATE" -> {
+                            callManager.onRemoteIce(
+                                candidate = payload["candidate"] as? String ?: "",
+                                sdpMid = payload["sdpMid"] as? String ?: "",
+                                sdpMLineIndex = (payload["sdpMLineIndex"] as? Double)?.toInt() ?: 0
+                            )
+                        }
+                        "CALL_ENDED", "CALL_REJECTED" -> {
+                            callManager.onCallEnded()
+                        }
+                    }
                 }
             }
         }

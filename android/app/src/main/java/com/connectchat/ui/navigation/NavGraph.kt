@@ -13,6 +13,7 @@ import com.connectchat.ui.screens.group.GroupInfoScreen
 import com.connectchat.ui.screens.login.LoginScreen
 import com.connectchat.ui.screens.profile.ProfileScreen
 import com.connectchat.ui.screens.settings.SettingsScreen
+import com.connectchat.ui.screens.call.CallScreen
 import com.connectchat.ui.screens.usersearch.UserSearchScreen
 
 @Composable
@@ -44,6 +45,7 @@ fun NavGraph(navController: NavHostController, startDestination: String) {
             ChatScreen(
                 conversationId = convId,
                 onBack = { navController.popBackStack() },
+                onStartCall = { navController.navigate(Screen.Call.route) { launchSingleTop = true } },
                 onGroupInfoClick = { groupId -> navController.navigate(Screen.GroupInfo.createRoute(groupId)) }
             )
         }
@@ -88,6 +90,11 @@ fun NavGraph(navController: NavHostController, startDestination: String) {
                     }
                 },
                 onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.Call.route) {
+            CallScreen(
+                onCallEnded = { navController.popBackStack() }
             )
         }
     }

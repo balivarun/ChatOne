@@ -95,6 +95,7 @@ dependencies {
     implementation(libs.paging.compose)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation("io.getstream:stream-webrtc-android:1.1.3")
     testImplementation(libs.junit)
     androidTestImplementation(libs.junit.ext)
     androidTestImplementation(libs.espresso)

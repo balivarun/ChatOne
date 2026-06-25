@@ -16,6 +16,7 @@ import com.connectchat.BuildConfig
 import com.connectchat.data.api.model.Conversation
 import com.connectchat.data.api.model.Message
 import com.connectchat.data.api.model.SendMessageRequest
+import com.connectchat.data.call.CallManager
 import com.connectchat.data.local.MessageEntity
 import com.connectchat.data.preferences.UserPreferences
 import com.connectchat.data.repository.ConversationRepository
@@ -44,6 +45,7 @@ class ChatViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
     private val userPreferences: UserPreferences,
     private val stompClient: StompClient,
+    private val callManager: CallManager,
     private val gson: Gson,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -270,5 +272,16 @@ class ChatViewModel @Inject constructor(
 
     fun clearError() {
         errorMessage = null
+    }
+
+    fun startCall(callType: String) {
+        val otherUser = conversation?.otherUser ?: return
+        callManager.prepareOutgoingCall(
+            targetEmail = otherUser.email,
+            targetName = otherUser.displayName,
+            targetAvatar = otherUser.avatarUrl,
+            convId = conversationId,
+            callType = callType
+        )
     }
 }

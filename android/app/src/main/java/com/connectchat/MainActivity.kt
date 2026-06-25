@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.map
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
+import com.connectchat.data.call.CallManager
+import com.connectchat.data.call.CallState
 import com.connectchat.data.preferences.UserPreferences
 import com.connectchat.ui.navigation.NavGraph
 import com.connectchat.ui.navigation.Screen
@@ -30,6 +32,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var userPreferences: UserPreferences
 
+    @Inject
+    lateinit var callManager: CallManager
+
     private val pendingConversationId = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,6 +45,8 @@ class MainActivity : ComponentActivity() {
             val token by userPreferences.accessToken
                 .map { it ?: "" }
                 .collectAsState(initial = null)
+
+            val callState by callManager.callState.collectAsState()
 
             ConnectChatTheme {
                 when {
@@ -64,6 +71,15 @@ class MainActivity : ComponentActivity() {
                             if (token!!.isNotBlank()) {
                                 pendingConversationId.value = null
                                 navController.navigate(Screen.Chat.createRoute(convId)) {
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
+
+                        // Navigate to call screen when a call starts (incoming or outgoing)
+                        LaunchedEffect(callState) {
+                            if (callState is CallState.Incoming || callState is CallState.Outgoing) {
+                                navController.navigate(Screen.Call.route) {
                                     launchSingleTop = true
                                 }
                             }

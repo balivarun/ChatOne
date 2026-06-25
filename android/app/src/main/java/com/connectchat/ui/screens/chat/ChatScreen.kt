@@ -30,8 +30,10 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Reply
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -82,6 +84,7 @@ import java.time.temporal.ChronoUnit
 fun ChatScreen(
     conversationId: String,
     onBack: () -> Unit,
+    onStartCall: (callType: String) -> Unit = {},
     onGroupInfoClick: (String) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
@@ -205,8 +208,17 @@ fun ChatScreen(
                             Icon(Icons.Default.MoreVert, contentDescription = "Group Info", tint = Color.White)
                         }
                     } else {
-                        IconButton(onClick = { }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
+                        IconButton(onClick = {
+                            viewModel.startCall("voice")
+                            onStartCall("voice")
+                        }) {
+                            Icon(Icons.Default.Phone, contentDescription = "Voice call", tint = Color.White)
+                        }
+                        IconButton(onClick = {
+                            viewModel.startCall("video")
+                            onStartCall("video")
+                        }) {
+                            Icon(Icons.Default.Videocam, contentDescription = "Video call", tint = Color.White)
                         }
                     }
                 }
