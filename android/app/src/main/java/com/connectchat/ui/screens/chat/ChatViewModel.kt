@@ -77,6 +77,7 @@ class ChatViewModel @Inject constructor(
                 stompClient.connect(BuildConfig.BASE_URL, token)
             }
             stompClient.subscribe("/topic/conversation/$conversationId")
+            stompClient.subscribe("/topic/conversation/$conversationId/events")
             stompClient.subscribe("/user/queue/messages")
             stompClient.subscribe("/user/queue/typing")
             observeFrames()
@@ -103,6 +104,33 @@ class ChatViewModel @Inject constructor(
                     if (message.conversationId == conversationId) {
                         messageRepository.insertMessage(message.toEntity())
                         conversationRepository.clearUnread(conversationId)
+                    }
+                }
+            }
+            frame.destination == "/topic/conversation/$conversationId/events" -> {
+                runCatching {
+                    @Suppress("UNCHECKED_CAST")
+                    val event = gson.fromJson(frame.body, Map::class.java) as Map<String, Any>
+                    when (event["type"] as? String) {
+                        "MESSAGE_READ" -> {
+                            @Suppress("UNCHECKED_CAST")
+                            val data = event["data"] as? Map<String, Any> ?: return@runCatching
+                            val messageId = data["messageId"]?.toString() ?: return@runCatching
+                            messageRepository.markMessageRead(messageId)
+                        }
+                        "MESSAGE_EDITED" -> {
+                            @Suppress("UNCHECKED_CAST")
+                            val data = event["data"] as? Map<String, Any> ?: return@runCatching
+                            val id = data["id"]?.toString() ?: return@runCatching
+                            val content = data["content"] as? String ?: return@runCatching
+                            messageRepository.updateMessage(id, content)
+                        }
+                        "MESSAGE_DELETED" -> {
+                            @Suppress("UNCHECKED_CAST")
+                            val data = event["data"] as? Map<String, Any> ?: return@runCatching
+                            val messageId = data["messageId"]?.toString() ?: return@runCatching
+                            messageRepository.deleteMessageLocally(messageId)
+                        }
                     }
                 }
             }

@@ -15,6 +15,7 @@ data class ConversationEntity(
     val groupName: String?,
     val groupAvatar: String?,
     val lastMessageContent: String?,
+    val lastMessageType: String?,
     val lastMessageSenderId: String?,
     val unreadCount: Int,
     val isArchived: Boolean,

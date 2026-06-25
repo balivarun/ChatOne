@@ -35,6 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.DoneAll
 import com.connectchat.data.local.ConversationEntity
 import com.connectchat.ui.theme.Accent
 import java.time.Instant
@@ -121,15 +123,35 @@ fun ConversationItem(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = conversation.lastMessageContent ?: "No messages yet",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    val isOwnMessage = conversation.lastMessageSenderId == currentUserId
+                    val snippet = when (conversation.lastMessageType) {
+                        "IMAGE" -> "📷 Photo"
+                        "FILE"  -> "📎 File"
+                        "VOICE" -> "🎤 Voice message"
+                        "VIDEO" -> "🎥 Video"
+                        else -> conversation.lastMessageContent ?: "No messages yet"
+                    }
+                    Row(
                         modifier = Modifier.weight(1f),
-                        fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal
-                    )
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isOwnMessage && conversation.lastMessageType != null) {
+                            Icon(
+                                imageVector = Icons.Default.DoneAll,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp).padding(end = 2.dp),
+                                tint = Accent.copy(alpha = 0.7f)
+                            )
+                        }
+                        Text(
+                            text = snippet,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal
+                        )
+                    }
                     if (conversation.unreadCount > 0) {
                         Surface(
                             color = Accent,

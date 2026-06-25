@@ -79,6 +79,18 @@ class MessageRepository @Inject constructor(
         Triple(url, mimeType, size)
     }
 
+    suspend fun markMessageRead(messageId: String) {
+        messageDao.markMessageRead(messageId)
+    }
+
+    suspend fun updateMessage(messageId: String, content: String) {
+        messageDao.updateContent(messageId, content)
+    }
+
+    suspend fun deleteMessageLocally(messageId: String) {
+        messageDao.markDeleted(messageId)
+    }
+
     suspend fun insertMessage(message: MessageEntity) {
         messageDao.insertMessage(message)
     }

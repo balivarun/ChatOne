@@ -70,6 +70,7 @@ fun Conversation.toEntity(): ConversationEntity = ConversationEntity(
     groupName = group?.name,
     groupAvatar = group?.avatarUrl,
     lastMessageContent = lastMessage?.content,
+    lastMessageType = lastMessage?.type?.name,
     lastMessageSenderId = lastMessage?.sender?.id,
     unreadCount = unreadCount,
     isArchived = isArchived,
