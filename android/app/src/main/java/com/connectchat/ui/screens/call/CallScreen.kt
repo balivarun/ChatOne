@@ -1,5 +1,6 @@
 package com.connectchat.ui.screens.call
 
+import android.Manifest
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,22 +21,34 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.connectchat.data.call.CallState
 import com.connectchat.ui.components.UserAvatar
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import org.webrtc.EglBase
 import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoFrame
 import org.webrtc.VideoSink
+import org.webrtc.VideoTrack
 
 private val NoOpVideoSink = VideoSink { _: VideoFrame? -> }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun CallScreen(
     onCallEnded: () -> Unit,
     viewModel: CallViewModel = hiltViewModel()
 ) {
     val callState by viewModel.callState.collectAsState()
-    val remoteStream by viewModel.remoteStream.collectAsState()
+    val remoteVideoTrack by viewModel.remoteVideoTrack.collectAsState()
     val eglBase = remember { viewModel.getEglBase() }
+
+    // Request camera + mic permissions up front
+    val permissions = rememberMultiplePermissionsState(
+        listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+    )
+    LaunchedEffect(Unit) {
+        if (!permissions.allPermissionsGranted) permissions.launchMultiplePermissionRequest()
+    }
 
     LaunchedEffect(callState) {
         if (callState is CallState.Idle) onCallEnded()
@@ -43,27 +56,22 @@ fun CallScreen(
 
     when (val state = callState) {
         is CallState.Incoming -> IncomingCallView(
-            callerName = state.callerName,
-            callerAvatar = state.callerAvatar,
-            callType = state.callType,
+            state = state,
             viewModel = viewModel,
             eglBase = eglBase,
-            onReject = { viewModel.rejectCall() }
+            permissionsGranted = permissions.allPermissionsGranted
         )
         is CallState.Outgoing -> OutgoingCallView(
-            targetName = state.targetName,
-            targetAvatar = state.targetAvatar,
-            callType = state.callType,
+            state = state,
             viewModel = viewModel,
             eglBase = eglBase,
-            onEnd = { viewModel.endCall() }
+            permissionsGranted = permissions.allPermissionsGranted
         )
         is CallState.Active -> ActiveCallView(
             callType = state.callType,
             viewModel = viewModel,
-            remoteStream = remoteStream,
-            eglBase = eglBase,
-            onEnd = { viewModel.endCall() }
+            remoteVideoTrack = remoteVideoTrack,
+            eglBase = eglBase
         )
         is CallState.Idle -> Unit
     }
@@ -71,15 +79,14 @@ fun CallScreen(
 
 @Composable
 private fun IncomingCallView(
-    callerName: String,
-    callerAvatar: String,
-    callType: String,
+    state: CallState.Incoming,
     viewModel: CallViewModel,
     eglBase: EglBase,
-    onReject: () -> Unit
+    permissionsGranted: Boolean
 ) {
+    val isVideo = state.callType == "video"
     val localSinkRef = remember { mutableStateOf<VideoSink>(NoOpVideoSink) }
-    var rendererReady by remember { mutableStateOf(callType != "video") }
+    val rendererReady = remember { mutableStateOf(!isVideo) }
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A2E)),
@@ -90,32 +97,38 @@ private fun IncomingCallView(
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             Text(
-                text = if (callType == "video") "Incoming video call" else "Incoming voice call",
+                text = if (isVideo) "Incoming video call" else "Incoming voice call",
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 16.sp
             )
-            UserAvatar(avatarUrl = callerAvatar, displayName = callerName, size = 100.dp)
-            Text(callerName, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            UserAvatar(avatarUrl = state.callerAvatar, displayName = state.callerName, size = 100.dp)
+            Text(state.callerName, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(32.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
                 CallActionButton(icon = Icons.Default.CallEnd, label = "Decline", tint = Color.Red) {
-                    onReject()
+                    viewModel.rejectCall()
                 }
-                CallActionButton(icon = Icons.Default.Call, label = "Accept", tint = Color(0xFF00C853)) {
-                    if (rendererReady) viewModel.acceptCall(localSinkRef.value)
+                CallActionButton(
+                    icon = if (isVideo) Icons.Default.Videocam else Icons.Default.Call,
+                    label = "Accept",
+                    tint = Color(0xFF00C853)
+                ) {
+                    if (rendererReady.value && permissionsGranted) {
+                        viewModel.acceptCall(localSinkRef.value, isVideo)
+                    }
                 }
             }
         }
 
-        // Tiny hidden renderer to initialize EGL for video calls
-        if (callType == "video") {
+        // 1×1 invisible renderer to have an EGL surface ready for the video path
+        if (isVideo) {
             AndroidView(
                 factory = { ctx ->
                     SurfaceViewRenderer(ctx).apply {
                         layoutParams = ViewGroup.LayoutParams(1, 1)
                         init(eglBase.eglBaseContext, null)
                         localSinkRef.value = this
-                        rendererReady = true
+                        rendererReady.value = true
                     }
                 },
                 modifier = Modifier.size(1.dp)
@@ -124,29 +137,26 @@ private fun IncomingCallView(
     }
 
     DisposableEffect(Unit) {
-        onDispose {
-            (localSinkRef.value as? SurfaceViewRenderer)?.release()
-        }
+        onDispose { (localSinkRef.value as? SurfaceViewRenderer)?.release() }
     }
 }
 
 @Composable
 private fun OutgoingCallView(
-    targetName: String,
-    targetAvatar: String?,
-    callType: String,
+    state: CallState.Outgoing,
     viewModel: CallViewModel,
     eglBase: EglBase,
-    onEnd: () -> Unit
+    permissionsGranted: Boolean
 ) {
-    val localSinkRef = remember { mutableStateOf<VideoSink?>(null) }
+    val isVideo = state.callType == "video"
     val mediaStarted = remember { mutableStateOf(false) }
+    val localSinkRef = remember { mutableStateOf<SurfaceViewRenderer?>(null) }
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A2E)),
         contentAlignment = Alignment.Center
     ) {
-        if (callType == "video") {
+        if (isVideo && permissionsGranted) {
             AndroidView(
                 factory = { ctx ->
                     SurfaceViewRenderer(ctx).apply {
@@ -160,31 +170,29 @@ private fun OutgoingCallView(
                         localSinkRef.value = this
                     }
                 },
-                modifier = Modifier.fillMaxSize(),
-                update = { renderer ->
-                    if (!mediaStarted.value && localSinkRef.value != null) {
-                        mediaStarted.value = true
-                        viewModel.startOutgoingMedia(renderer)
-                    }
-                }
+                modifier = Modifier.fillMaxSize()
             )
-        } else {
-            // Voice call — start media immediately with no-op sink
-            LaunchedEffect(Unit) {
-                if (!mediaStarted.value) {
-                    mediaStarted.value = true
-                    viewModel.startOutgoingMedia(NoOpVideoSink)
-                }
+        }
+
+        // Start media once permissions granted and (for video) renderer is ready
+        LaunchedEffect(permissionsGranted, localSinkRef.value) {
+            if (!permissionsGranted || mediaStarted.value) return@LaunchedEffect
+            val readyForVideo = !isVideo || localSinkRef.value != null
+            if (readyForVideo) {
+                mediaStarted.value = true
+                val sink: VideoSink = localSinkRef.value ?: NoOpVideoSink
+                viewModel.startOutgoingMedia(sink, isVideo)
             }
         }
 
+        // Calling overlay text
         Column(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 80.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            UserAvatar(avatarUrl = targetAvatar, displayName = targetName, size = 80.dp)
-            Text(targetName, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            UserAvatar(avatarUrl = state.targetAvatar, displayName = state.targetName, size = 80.dp)
+            Text(state.targetName, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Text("Calling...", color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
         }
 
@@ -197,8 +205,10 @@ private fun OutgoingCallView(
                 label = if (viewModel.isMicOn) "Mute" else "Unmute",
                 onClick = { viewModel.toggleMic() }
             )
-            CallActionButton(icon = Icons.Default.CallEnd, label = "End", tint = Color.Red) { onEnd() }
-            if (callType == "video") {
+            CallActionButton(icon = Icons.Default.CallEnd, label = "End", tint = Color.Red) {
+                viewModel.endCall()
+            }
+            if (isVideo) {
                 CallControlButton(
                     icon = if (viewModel.isCameraOn) Icons.Default.Videocam else Icons.Default.VideocamOff,
                     label = if (viewModel.isCameraOn) "Camera off" else "Camera on",
@@ -209,7 +219,7 @@ private fun OutgoingCallView(
     }
 
     DisposableEffect(Unit) {
-        onDispose { (localSinkRef.value as? SurfaceViewRenderer)?.release() }
+        onDispose { localSinkRef.value?.release() }
     }
 }
 
@@ -217,20 +227,21 @@ private fun OutgoingCallView(
 private fun ActiveCallView(
     callType: String,
     viewModel: CallViewModel,
-    remoteStream: org.webrtc.MediaStream?,
-    eglBase: EglBase,
-    onEnd: () -> Unit
+    remoteVideoTrack: VideoTrack?,
+    eglBase: EglBase
 ) {
+    val isVideo = callType == "video"
     val remoteSinkRef = remember { mutableStateOf<SurfaceViewRenderer?>(null) }
 
-    LaunchedEffect(remoteStream, remoteSinkRef.value) {
+    // Attach incoming remote track to renderer as soon as both are ready
+    LaunchedEffect(remoteVideoTrack, remoteSinkRef.value) {
         val renderer = remoteSinkRef.value ?: return@LaunchedEffect
-        remoteStream?.videoTracks?.firstOrNull()?.addSink(renderer)
+        remoteVideoTrack?.addSink(renderer)
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        if (callType == "video") {
-            // Remote full-screen
+        if (isVideo) {
+            // Full-screen remote video
             AndroidView(
                 factory = { ctx ->
                     SurfaceViewRenderer(ctx).apply {
@@ -246,7 +257,7 @@ private fun ActiveCallView(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Local preview (top-right pip)
+            // Local camera picture-in-picture (top right)
             AndroidView(
                 factory = { ctx ->
                     SurfaceViewRenderer(ctx).apply {
@@ -267,19 +278,22 @@ private fun ActiveCallView(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Phone, contentDescription = null, tint = Color.White, modifier = Modifier.size(64.dp))
+                    Icon(
+                        Icons.Default.Phone, contentDescription = null,
+                        tint = Color.White, modifier = Modifier.size(64.dp)
+                    )
                     Spacer(Modifier.height(16.dp))
                     Text("Call Connected", color = Color.White, fontSize = 20.sp)
                 }
             }
         }
 
-        // Controls bar
+        // Control bar
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 64.dp)
-                .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                 .padding(horizontal = 24.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -289,7 +303,7 @@ private fun ActiveCallView(
                 label = if (viewModel.isMicOn) "Mute" else "Unmute",
                 onClick = { viewModel.toggleMic() }
             )
-            if (callType == "video") {
+            if (isVideo) {
                 CallControlButton(
                     icon = if (viewModel.isCameraOn) Icons.Default.Videocam else Icons.Default.VideocamOff,
                     label = if (viewModel.isCameraOn) "Cam off" else "Cam on",
@@ -306,12 +320,19 @@ private fun ActiveCallView(
                 label = "Speaker",
                 onClick = { }
             )
-            CallActionButton(icon = Icons.Default.CallEnd, label = "End", tint = Color.Red) { onEnd() }
+            CallActionButton(
+                icon = Icons.Default.CallEnd, label = "End", tint = Color.Red,
+                onClick = { viewModel.endCall() }
+            )
         }
     }
 
     DisposableEffect(Unit) {
-        onDispose { remoteSinkRef.value?.release() }
+        onDispose {
+            val renderer = remoteSinkRef.value
+            if (renderer != null) remoteVideoTrack?.removeSink(renderer)
+            renderer?.release()
+        }
     }
 }
 
@@ -320,9 +341,7 @@ private fun CallControlButton(icon: ImageVector, label: String, onClick: () -> U
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         IconButton(
             onClick = onClick,
-            modifier = Modifier
-                .size(52.dp)
-                .background(Color.White.copy(alpha = 0.2f), CircleShape)
+            modifier = Modifier.size(52.dp).background(Color.White.copy(alpha = 0.2f), CircleShape)
         ) {
             Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp))
         }
@@ -335,9 +354,7 @@ private fun CallActionButton(icon: ImageVector, label: String, tint: Color, onCl
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         IconButton(
             onClick = onClick,
-            modifier = Modifier
-                .size(64.dp)
-                .background(tint, CircleShape)
+            modifier = Modifier.size(64.dp).background(tint, CircleShape)
         ) {
             Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(28.dp))
         }

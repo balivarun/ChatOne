@@ -95,7 +95,7 @@ class ChatListViewModel @Inject constructor(
                                 callerId = payload["callerId"] as? String ?: "",
                                 callerName = payload["callerName"] as? String ?: "Unknown",
                                 callerAvatar = payload["callerAvatar"] as? String ?: "",
-                                callerEmail = payload["callerId"] as? String ?: "",
+                                callerEmail = payload["callerEmail"] as? String ?: "",
                                 convId = payload["conversationId"] as? String ?: "",
                                 callType = payload["callType"] as? String ?: "video",
                                 sdp = payload["sdp"] as? String ?: ""

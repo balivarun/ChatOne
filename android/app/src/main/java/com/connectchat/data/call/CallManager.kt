@@ -3,14 +3,20 @@ package com.connectchat.data.call
 import com.connectchat.data.webrtc.WebRtcManager
 import com.connectchat.data.websocket.StompClient
 import com.google.gson.Gson
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import org.webrtc.AudioTrack
 import org.webrtc.IceCandidate
 import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.SessionDescription
 import org.webrtc.VideoSink
+import org.webrtc.VideoTrack
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,10 +46,17 @@ class CallManager @Inject constructor(
     private val webRtcManager: WebRtcManager,
     private val gson: Gson
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     private val _callState = MutableStateFlow<CallState>(CallState.Idle)
     val callState: StateFlow<CallState> = _callState.asStateFlow()
 
+    // Holds remote video/audio tracks so the CallScreen can render them
+    private val _remoteVideoTrack = MutableStateFlow<VideoTrack?>(null)
+    val remoteVideoTrack: StateFlow<VideoTrack?> = _remoteVideoTrack.asStateFlow()
+
     private var peerEmail: String = ""
+    private var _pendingSdp: SessionDescription? = null
 
     private val peerConnectionObserver = object : PeerConnection.Observer {
         override fun onIceCandidate(candidate: IceCandidate) {
@@ -51,31 +64,43 @@ class CallManager @Inject constructor(
             stompClient.send("/app/call.ice", gson.toJson(mapOf(
                 "targetEmail" to peerEmail,
                 "candidate" to candidate.sdp,
-                "sdpMid" to candidate.sdpMid,
+                "sdpMid" to (candidate.sdpMid ?: ""),
                 "sdpMLineIndex" to candidate.sdpMLineIndex
             )))
         }
-        override fun onAddStream(stream: MediaStream) {
-            _remoteStream.value = stream
+
+        // With Unified Plan, onAddTrack fires per-track; streams[] may be empty.
+        // We capture the VideoTrack directly from the RtpReceiver.
+        override fun onAddTrack(receiver: org.webrtc.RtpReceiver?, streams: Array<out MediaStream>?) {
+            when (val track = receiver?.track()) {
+                is VideoTrack -> _remoteVideoTrack.value = track
+                else -> Unit
+            }
         }
+
         override fun onIceConnectionChange(state: PeerConnection.IceConnectionState) {
-            if (state == PeerConnection.IceConnectionState.CONNECTED ||
-                state == PeerConnection.IceConnectionState.COMPLETED) {
-                val current = _callState.value
-                val type = when (current) {
-                    is CallState.Outgoing -> current.callType
-                    is CallState.Incoming -> current.callType
-                    else -> "video"
+            when (state) {
+                PeerConnection.IceConnectionState.CONNECTED,
+                PeerConnection.IceConnectionState.COMPLETED -> {
+                    val type = when (val s = _callState.value) {
+                        is CallState.Outgoing -> s.callType
+                        is CallState.Incoming -> s.callType
+                        else -> "video"
+                    }
+                    _callState.value = CallState.Active(type)
                 }
-                _callState.value = CallState.Active(type)
-            }
-            if (state == PeerConnection.IceConnectionState.DISCONNECTED ||
-                state == PeerConnection.IceConnectionState.FAILED ||
-                state == PeerConnection.IceConnectionState.CLOSED) {
-                _callState.value = CallState.Idle
-                webRtcManager.dispose()
+                PeerConnection.IceConnectionState.DISCONNECTED,
+                PeerConnection.IceConnectionState.FAILED,
+                PeerConnection.IceConnectionState.CLOSED -> {
+                    _callState.value = CallState.Idle
+                    webRtcManager.dispose()
+                    _remoteVideoTrack.value = null
+                }
+                else -> Unit
             }
         }
+
+        override fun onAddStream(stream: MediaStream) {}
         override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
         override fun onIceConnectionReceivingChange(p0: Boolean) {}
         override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {}
@@ -83,13 +108,7 @@ class CallManager @Inject constructor(
         override fun onRemoveStream(stream: MediaStream?) {}
         override fun onDataChannel(dc: org.webrtc.DataChannel?) {}
         override fun onRenegotiationNeeded() {}
-        override fun onAddTrack(receiver: org.webrtc.RtpReceiver?, streams: Array<out MediaStream>?) {
-            streams?.firstOrNull()?.let { _remoteStream.value = it }
-        }
     }
-
-    private val _remoteStream = MutableStateFlow<MediaStream?>(null)
-    val remoteStream: StateFlow<MediaStream?> = _remoteStream.asStateFlow()
 
     fun onIncomingOffer(callerId: String, callerName: String, callerAvatar: String,
                         callerEmail: String, convId: String, callType: String, sdp: String) {
@@ -99,9 +118,7 @@ class CallManager @Inject constructor(
         _callState.value = CallState.Incoming(callerId, callerName, callerAvatar, callerEmail, convId, callType)
     }
 
-    private var _pendingSdp: SessionDescription? = null
-
-    // Phase 1: set state to Outgoing (navigates to CallScreen)
+    // Phase 1: update state so MainActivity navigates to CallScreen
     fun prepareOutgoingCall(
         targetEmail: String, targetName: String, targetAvatar: String?,
         convId: String, callType: String
@@ -111,34 +128,42 @@ class CallManager @Inject constructor(
         _callState.value = CallState.Outgoing(targetEmail, targetName, targetAvatar, convId, callType)
     }
 
-    // Phase 2: called from CallScreen once it has a local VideoSink ready
-    fun startOutgoingMedia(localSink: VideoSink) {
-        val outgoing = _callState.value as? CallState.Outgoing ?: return
-        webRtcManager.init()
-        webRtcManager.startLocalStream(localSink)
-        webRtcManager.createPeerConnection(peerConnectionObserver)
-        webRtcManager.createOffer { sdp ->
-            stompClient.send("/app/call.offer", gson.toJson(mapOf(
-                "targetEmail" to outgoing.targetEmail,
-                "conversationId" to outgoing.conversationId,
-                "sdp" to sdp.description,
-                "callType" to outgoing.callType
-            )))
+    // Phase 2: called from CallScreen after it has rendered the local VideoSink
+    fun startOutgoingMedia(localSink: VideoSink, isVideo: Boolean) {
+        if (_callState.value !is CallState.Outgoing) return
+        val outgoing = _callState.value as CallState.Outgoing
+        scope.launch {
+            webRtcManager.init()
+            if (isVideo) webRtcManager.startLocalStream(localSink)
+            else webRtcManager.startAudioOnlyStream()
+            webRtcManager.createPeerConnection(peerConnectionObserver)
+            webRtcManager.createOffer { sdp ->
+                stompClient.send("/app/call.offer", gson.toJson(mapOf(
+                    "targetEmail" to outgoing.targetEmail,
+                    "conversationId" to outgoing.conversationId,
+                    "sdp" to sdp.description,
+                    "callType" to outgoing.callType
+                )))
+            }
         }
     }
 
-    fun acceptCall(localSink: VideoSink) {
+    fun acceptCall(localSink: VideoSink, isVideo: Boolean) {
         val incoming = _callState.value as? CallState.Incoming ?: return
-        webRtcManager.init()
-        webRtcManager.startLocalStream(localSink)
-        webRtcManager.createPeerConnection(peerConnectionObserver)
-        _pendingSdp?.let { webRtcManager.setRemoteDescription(it) }
+        val pendingSdp = _pendingSdp ?: return
         _pendingSdp = null
-        webRtcManager.createAnswer { sdp ->
-            stompClient.send("/app/call.answer", gson.toJson(mapOf(
-                "targetEmail" to incoming.callerEmail,
-                "sdp" to sdp.description
-            )))
+        scope.launch {
+            webRtcManager.init()
+            if (isVideo) webRtcManager.startLocalStream(localSink)
+            else webRtcManager.startAudioOnlyStream()
+            webRtcManager.createPeerConnection(peerConnectionObserver)
+            webRtcManager.setRemoteDescription(pendingSdp)
+            webRtcManager.createAnswer { sdp ->
+                stompClient.send("/app/call.answer", gson.toJson(mapOf(
+                    "targetEmail" to incoming.callerEmail,
+                    "sdp" to sdp.description
+                )))
+            }
         }
     }
 
@@ -152,9 +177,9 @@ class CallManager @Inject constructor(
     fun endCall() {
         if (_callState.value is CallState.Idle) return
         stompClient.send("/app/call.end", gson.toJson(mapOf("targetEmail" to peerEmail)))
-        webRtcManager.dispose()
+        scope.launch { webRtcManager.dispose() }
         _callState.value = CallState.Idle
-        _remoteStream.value = null
+        _remoteVideoTrack.value = null
         peerEmail = ""
     }
 
@@ -167,9 +192,9 @@ class CallManager @Inject constructor(
     }
 
     fun onCallEnded() {
-        webRtcManager.dispose()
+        scope.launch { webRtcManager.dispose() }
         _callState.value = CallState.Idle
-        _remoteStream.value = null
+        _remoteVideoTrack.value = null
         peerEmail = ""
     }
 

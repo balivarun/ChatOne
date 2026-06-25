@@ -27,6 +27,7 @@ public class CallController {
         messagingTemplate.convertAndSendToUser(targetEmail, "/queue/call",
                 Map.of("type", "CALL_OFFER",
                        "callerId", caller.getId().toString(),
+                       "callerEmail", caller.getEmail(),
                        "callerName", caller.getDisplayName(),
                        "callerAvatar", caller.getAvatarUrl() != null ? caller.getAvatarUrl() : "",
                        "conversationId", payload.getOrDefault("conversationId", ""),

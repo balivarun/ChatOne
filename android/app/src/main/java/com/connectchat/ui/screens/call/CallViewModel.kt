@@ -8,8 +8,8 @@ import com.connectchat.data.call.CallManager
 import com.connectchat.data.call.CallState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
-import org.webrtc.MediaStream
 import org.webrtc.VideoSink
+import org.webrtc.VideoTrack
 import javax.inject.Inject
 
 @HiltViewModel
@@ -18,18 +18,17 @@ class CallViewModel @Inject constructor(
 ) : ViewModel() {
 
     val callState: StateFlow<CallState> = callManager.callState
-    val remoteStream: StateFlow<MediaStream?> = callManager.remoteStream
+    val remoteVideoTrack: StateFlow<VideoTrack?> = callManager.remoteVideoTrack
 
     var isMicOn by mutableStateOf(true)
     var isCameraOn by mutableStateOf(true)
-    var isSpeakerOn by mutableStateOf(true)
 
-    fun startOutgoingMedia(localSink: VideoSink) {
-        callManager.startOutgoingMedia(localSink)
+    fun startOutgoingMedia(localSink: VideoSink, isVideo: Boolean) {
+        callManager.startOutgoingMedia(localSink, isVideo)
     }
 
-    fun acceptCall(localSink: VideoSink) {
-        callManager.acceptCall(localSink)
+    fun acceptCall(localSink: VideoSink, isVideo: Boolean) {
+        callManager.acceptCall(localSink, isVideo)
     }
 
     fun rejectCall() {

@@ -14,6 +14,7 @@ class WebRtcManager @Inject constructor(
     private var peerConnection: PeerConnection? = null
     private var localVideoTrack: VideoTrack? = null
     private var localAudioTrack: AudioTrack? = null
+    private var localVideoSource: VideoSource? = null
     private var localStream: MediaStream? = null
     private var videoCapturer: VideoCapturer? = null
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
@@ -26,15 +27,18 @@ class WebRtcManager @Inject constructor(
     )
 
     fun init() {
+        // Safe to call multiple times — PeerConnectionFactory.initialize() is idempotent
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(context)
                 .setEnableInternalTracer(false)
                 .createInitializationOptions()
         )
-        peerConnectionFactory = PeerConnectionFactory.builder()
-            .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
-            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true))
-            .createPeerConnectionFactory()
+        if (peerConnectionFactory == null) {
+            peerConnectionFactory = PeerConnectionFactory.builder()
+                .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
+                .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true))
+                .createPeerConnectionFactory()
+        }
     }
 
     fun startLocalStream(localRenderer: VideoSink): MediaStream? {
@@ -42,16 +46,28 @@ class WebRtcManager @Inject constructor(
 
         surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", eglBase.eglBaseContext)
         videoCapturer = createCameraCapturer()
-        localVideoTrack = factory.createVideoTrack("local_video", factory.createVideoSource(false).also { source ->
-            videoCapturer?.initialize(surfaceTextureHelper, context, source.capturerObserver)
-            videoCapturer?.startCapture(1280, 720, 30)
-        })
+
+        // Keep VideoSource reference so it isn't GC'd while capturer is running
+        localVideoSource = factory.createVideoSource(false)
+        videoCapturer?.initialize(surfaceTextureHelper, context, localVideoSource!!.capturerObserver)
+        videoCapturer?.startCapture(1280, 720, 30)
+
+        localVideoTrack = factory.createVideoTrack("local_video", localVideoSource!!)
         localVideoTrack?.addSink(localRenderer)
 
         localAudioTrack = factory.createAudioTrack("local_audio", factory.createAudioSource(MediaConstraints()))
 
         localStream = factory.createLocalMediaStream("local_stream").also {
             it.addTrack(localVideoTrack)
+            it.addTrack(localAudioTrack)
+        }
+        return localStream
+    }
+
+    fun startAudioOnlyStream(): MediaStream? {
+        val factory = peerConnectionFactory ?: return null
+        localAudioTrack = factory.createAudioTrack("local_audio", factory.createAudioSource(MediaConstraints()))
+        localStream = factory.createLocalMediaStream("local_stream").also {
             it.addTrack(localAudioTrack)
         }
         return localStream
@@ -64,10 +80,8 @@ class WebRtcManager @Inject constructor(
             continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
         }
         peerConnection = factory.createPeerConnection(rtcConfig, observer)
-        localStream?.let { stream ->
-            stream.audioTracks.forEach { peerConnection?.addTrack(it) }
-            stream.videoTracks.forEach { peerConnection?.addTrack(it) }
-        }
+        localStream?.audioTracks?.forEach { peerConnection?.addTrack(it) }
+        localStream?.videoTracks?.forEach { peerConnection?.addTrack(it) }
         return peerConnection
     }
 
@@ -105,37 +119,38 @@ class WebRtcManager @Inject constructor(
         peerConnection?.addIceCandidate(candidate)
     }
 
-    fun toggleMic(enabled: Boolean) {
-        localAudioTrack?.setEnabled(enabled)
-    }
-
-    fun toggleCamera(enabled: Boolean) {
-        localVideoTrack?.setEnabled(enabled)
-    }
-
-    fun switchCamera() {
-        (videoCapturer as? CameraVideoCapturer)?.switchCamera(null)
-    }
+    fun toggleMic(enabled: Boolean) { localAudioTrack?.setEnabled(enabled) }
+    fun toggleCamera(enabled: Boolean) { localVideoTrack?.setEnabled(enabled) }
+    fun switchCamera() { (videoCapturer as? CameraVideoCapturer)?.switchCamera(null) }
 
     fun dispose() {
-        videoCapturer?.stopCapture()
+        runCatching { videoCapturer?.stopCapture() }
         videoCapturer?.dispose()
         surfaceTextureHelper?.dispose()
         localVideoTrack?.dispose()
         localAudioTrack?.dispose()
+        localVideoSource?.dispose()
         localStream?.dispose()
         peerConnection?.dispose()
+        peerConnectionFactory?.dispose()
         peerConnection = null
+        peerConnectionFactory = null
         localVideoTrack = null
         localAudioTrack = null
+        localVideoSource = null
         localStream = null
+        videoCapturer = null
+        surfaceTextureHelper = null
     }
 
     private fun createCameraCapturer(): VideoCapturer? {
-        val enumerator = Camera2Enumerator(context)
-        val frontCamera = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
-        val backCamera = enumerator.deviceNames.firstOrNull { enumerator.isBackFacing(it) }
-        return (frontCamera ?: backCamera)?.let { enumerator.createCapturer(it, null) }
+        return runCatching {
+            val enumerator = Camera2Enumerator(context)
+            val deviceNames = enumerator.deviceNames
+            val frontCamera = deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
+            val backCamera = deviceNames.firstOrNull { enumerator.isBackFacing(it) }
+            (frontCamera ?: backCamera)?.let { enumerator.createCapturer(it, null) }
+        }.getOrNull()
     }
 }
 
