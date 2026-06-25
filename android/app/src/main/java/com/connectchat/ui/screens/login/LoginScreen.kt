@@ -122,6 +122,11 @@ fun LoginScreen(
                         strokeWidth = 2.dp,
                         color = Accent
                     )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Signing in...",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 } else {
                     Text(
                         text = "G",
@@ -137,11 +142,21 @@ fun LoginScreen(
                 }
             }
 
+            if (viewModel.uiState is LoginUiState.Loading) {
+                Text(
+                    text = "Server is starting up, please wait\n(this takes ~30 seconds on first launch)",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+
             if (viewModel.uiState is LoginUiState.Error) {
                 Text(
                     text = (viewModel.uiState as LoginUiState.Error).message,
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
         }

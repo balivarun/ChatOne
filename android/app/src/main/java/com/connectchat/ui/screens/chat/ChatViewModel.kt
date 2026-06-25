@@ -1,5 +1,9 @@
 package com.connectchat.ui.screens.chat
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -21,16 +25,21 @@ import com.connectchat.data.websocket.StompClient
 import com.connectchat.data.websocket.StompFrame
 import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val messageRepository: MessageRepository,
     private val conversationRepository: ConversationRepository,
     private val userPreferences: UserPreferences,
@@ -158,9 +167,25 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun sendMessageWithAttachment(bytes: ByteArray, fileName: String, mimeType: String) {
+    fun sendMessageWithAttachment(uri: Uri, fileName: String, mimeType: String) {
         viewModelScope.launch {
             isUploading = true
+            val bytes = withContext(Dispatchers.IO) {
+                val raw = appContext.contentResolver.openInputStream(uri)?.readBytes() ?: ByteArray(0)
+                if (mimeType.startsWith("image/") && raw.isNotEmpty()) {
+                    runCatching {
+                        val bitmap = BitmapFactory.decodeByteArray(raw, 0, raw.size)
+                        val out = ByteArrayOutputStream()
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 75, out)
+                        out.toByteArray()
+                    }.getOrDefault(raw)
+                } else raw
+            }
+            if (bytes.isEmpty()) {
+                errorMessage = "Failed to read file"
+                isUploading = false
+                return@launch
+            }
             messageRepository.uploadFile(bytes, fileName, mimeType).onSuccess { (url, type, size) ->
                 val msgType = if (mimeType.startsWith("image/")) "IMAGE" else "FILE"
                 messageRepository.sendMessage(

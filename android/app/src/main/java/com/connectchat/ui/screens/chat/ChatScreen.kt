@@ -95,31 +95,24 @@ fun ChatScreen(
     // Camera photo URI
     var cameraPhotoUri by remember { mutableStateOf<Uri?>(null) }
 
-    fun readBytesFromUri(uri: Uri): Pair<ByteArray, String> {
-        val cr = context.contentResolver
-        val mimeType = cr.getType(uri) ?: "application/octet-stream"
-        val bytes = cr.openInputStream(uri)?.readBytes() ?: ByteArray(0)
-        return bytes to mimeType
-    }
-
     // Gallery / file picker
     val filePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
-        val (bytes, mimeType) = readBytesFromUri(uri)
-        val fileName = uri.lastPathSegment ?: "file"
-        viewModel.sendMessageWithAttachment(bytes, fileName, mimeType)
+        val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+        val fileName = uri.lastPathSegment ?: "file_${System.currentTimeMillis()}"
+        viewModel.sendMessageWithAttachment(uri, fileName, mimeType)
     }
 
-    // Camera capture
+    // Camera capture — MIME type hardcoded to image/jpeg because FileProvider URIs
+    // return null from ContentResolver.getType()
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success: Boolean ->
         if (success) {
             cameraPhotoUri?.let { uri ->
-                val (bytes, mimeType) = readBytesFromUri(uri)
-                viewModel.sendMessageWithAttachment(bytes, "photo_${System.currentTimeMillis()}.jpg", mimeType)
+                viewModel.sendMessageWithAttachment(uri, "photo_${System.currentTimeMillis()}.jpg", "image/jpeg")
             }
         }
     }
