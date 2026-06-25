@@ -12,6 +12,9 @@ import org.springframework.stereotype.Controller;
 import java.security.Principal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Controller
@@ -21,20 +24,26 @@ public class CallController {
     private final SimpMessagingTemplate messagingTemplate;
     private final CustomUserDetailsService userDetailsService;
 
-    // @AuthenticationPrincipal does not resolve the full UserPrincipal in plain STOMP
-    // context without @EnableWebSocketSecurity. Use Principal directly — getName()
-    // returns the email set by the ChannelInterceptor via accessor.setUser().
+    // Single background thread used to re-deliver CALL_OFFER after a short delay.
+    // On older clients the STOMP frame collector starts ~5s after connect (after
+    // initial API calls finish), so the first delivery can race and be dropped.
+    // The retry arrives after the collector is guaranteed to be running.
+    // onIncomingOffer() on the client guards with "if not Idle return", so a
+    // duplicate offer when the call is already Incoming is safely ignored.
+    private final ScheduledExecutorService retryScheduler =
+            Executors.newSingleThreadScheduledExecutor();
+
     @MessageMapping("/call.offer")
     public void offer(@Payload Map<String, Object> payload, Principal principal) {
         if (principal == null) {
-            log.warn("CALL_OFFER rejected — no principal (unauthenticated)");
+            log.warn("CALL_OFFER rejected — unauthenticated");
             return;
         }
         String targetEmail = (String) payload.get("targetEmail");
         String callerEmail = principal.getName();
         log.info("CALL_OFFER from={} to={} type={}", callerEmail, targetEmail, payload.get("callType"));
         if (targetEmail == null || targetEmail.isBlank()) {
-            log.warn("CALL_OFFER rejected — targetEmail is blank");
+            log.warn("CALL_OFFER rejected — targetEmail blank");
             return;
         }
 
@@ -48,7 +57,6 @@ public class CallController {
             log.warn("Could not load caller details for {}: {}", callerEmail, e.getMessage());
         }
 
-        // Use HashMap so null values don't throw (Map.of forbids nulls)
         Map<String, Object> msg = new HashMap<>();
         msg.put("type", "CALL_OFFER");
         msg.put("callerEmail", callerEmail);
@@ -57,7 +65,17 @@ public class CallController {
         msg.put("conversationId", payload.getOrDefault("conversationId", ""));
         msg.put("sdp", payload.getOrDefault("sdp", ""));
         msg.put("callType", payload.getOrDefault("callType", "video"));
+
+        // First delivery — may be dropped if callee collector isn't ready yet
         messagingTemplate.convertAndSendToUser(targetEmail, "/queue/call", msg);
+
+        // Retry after 6s — by then the collector is definitely running.
+        // Duplicate is safely ignored by the client's onIncomingOffer() guard.
+        final String target = targetEmail;
+        final Map<String, Object> retry = new HashMap<>(msg);
+        retryScheduler.schedule(
+                () -> messagingTemplate.convertAndSendToUser(target, "/queue/call", retry),
+                6, TimeUnit.SECONDS);
     }
 
     @MessageMapping("/call.answer")
