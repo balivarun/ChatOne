@@ -82,6 +82,7 @@ class ChatViewModel @Inject constructor(
             stompClient.subscribe("/topic/conversation/$conversationId/events")
             stompClient.subscribe("/user/queue/messages")
             stompClient.subscribe("/user/queue/typing")
+            stompClient.subscribe("/user/queue/call")
             observeFrames()
         }
     }
@@ -148,6 +149,30 @@ class ChatViewModel @Inject constructor(
                         } else {
                             typingUsers - userId
                         }
+                    }
+                }
+            }
+            frame.destination.contains("/queue/call") -> {
+                runCatching {
+                    @Suppress("UNCHECKED_CAST")
+                    val payload = gson.fromJson(frame.body, Map::class.java) as Map<String, Any>
+                    when (payload["type"] as? String) {
+                        "CALL_OFFER" -> callManager.onIncomingOffer(
+                            callerId = payload["callerId"] as? String ?: "",
+                            callerName = payload["callerName"] as? String ?: "Unknown",
+                            callerAvatar = payload["callerAvatar"] as? String ?: "",
+                            callerEmail = payload["callerEmail"] as? String ?: "",
+                            convId = payload["conversationId"] as? String ?: "",
+                            callType = payload["callType"] as? String ?: "video",
+                            sdp = payload["sdp"] as? String ?: ""
+                        )
+                        "CALL_ANSWER" -> callManager.onRemoteAnswer(payload["sdp"] as? String ?: "")
+                        "ICE_CANDIDATE" -> callManager.onRemoteIce(
+                            candidate = payload["candidate"] as? String ?: "",
+                            sdpMid = payload["sdpMid"] as? String ?: "",
+                            sdpMLineIndex = (payload["sdpMLineIndex"] as? Double)?.toInt() ?: 0
+                        )
+                        "CALL_ENDED", "CALL_REJECTED" -> callManager.onCallEnded()
                     }
                 }
             }
