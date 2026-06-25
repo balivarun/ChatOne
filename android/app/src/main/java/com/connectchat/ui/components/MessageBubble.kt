@@ -220,20 +220,33 @@ fun MessageBubble(
 
             // Message content
             val msgType = runCatching { MessageType.valueOf(message.type) }.getOrDefault(MessageType.TEXT)
-            when (msgType) {
-                MessageType.IMAGE -> {
+            val imageUrl = message.attachmentUrl ?: message.content.takeIf { msgType == MessageType.IMAGE }
+            when {
+                msgType == MessageType.IMAGE && imageUrl != null -> {
                     AsyncImage(
-                        model = message.content,
+                        model = imageUrl,
                         contentDescription = "Image",
-                        modifier = Modifier.size(200.dp).clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
+                        modifier = Modifier
+                            .widthIn(max = maxBubbleWidth - 20.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.FillWidth
                     )
                 }
-                MessageType.FILE -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Forward, contentDescription = "File", tint = Accent)
+                msgType == MessageType.FILE -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Icon(Icons.Default.Forward, contentDescription = "File", tint = Accent, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(message.content ?: "File", style = MaterialTheme.typography.bodyMedium, color = Accent)
+                        Text(
+                            text = message.attachmentFileName ?: message.content ?: "File",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Accent,
+                            maxLines = 1
+                        )
                     }
                 }
                 else -> {

@@ -8,7 +8,7 @@ import androidx.room.Query
 
 @Dao
 interface MessageDao {
-    @Query("SELECT * FROM messages WHERE conversationId = :convId ORDER BY createdAt ASC")
+    @Query("SELECT * FROM messages WHERE conversationId = :convId ORDER BY createdAt DESC")
     fun getMessagesPaged(convId: String): PagingSource<Int, MessageEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

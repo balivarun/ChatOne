@@ -12,6 +12,8 @@ data class MessageEntity(
     val senderAvatar: String?,
     val content: String?,
     val type: String,
+    val attachmentUrl: String?,
+    val attachmentFileName: String?,
     val replyToId: String?,
     val replyToContent: String?,
     val replyToSenderName: String?,

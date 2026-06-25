@@ -92,6 +92,8 @@ fun Message.toEntity(): MessageEntity = MessageEntity(
     senderAvatar = sender.avatarUrl,
     content = content,
     type = type.name,
+    attachmentUrl = attachments.firstOrNull()?.url,
+    attachmentFileName = attachments.firstOrNull()?.fileName,
     replyToId = replyTo?.id,
     replyToContent = replyTo?.content,
     replyToSenderName = replyTo?.sender?.displayName,
@@ -120,7 +122,15 @@ fun MessageEntity.toDomain(): Message = Message(
     replyTo = null,
     isEdited = isEdited,
     isDeleted = isDeleted,
-    attachments = emptyList(),
+    attachments = if (attachmentUrl != null) listOf(
+        com.connectchat.data.api.model.Attachment(
+            id = id,
+            url = attachmentUrl,
+            fileName = attachmentFileName,
+            fileType = null,
+            fileSize = null
+        )
+    ) else emptyList(),
     readBy = emptyList(),
     createdAt = createdAt,
     updatedAt = updatedAt
