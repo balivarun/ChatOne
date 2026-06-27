@@ -55,6 +55,8 @@ class CallManager @Inject constructor(
     private val _remoteVideoTrack = MutableStateFlow<VideoTrack?>(null)
     val remoteVideoTrack: StateFlow<VideoTrack?> = _remoteVideoTrack.asStateFlow()
 
+    val localVideoTrack: VideoTrack? get() = webRtcManager.localVideoTrack
+
     /** Human-readable status shown in the calling screen (e.g. "Connecting…", "Ringing…") */
     private val _callStatus = MutableStateFlow("Calling…")
     val callStatus: StateFlow<String> = _callStatus.asStateFlow()

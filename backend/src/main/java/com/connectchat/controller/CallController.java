@@ -1,7 +1,9 @@
 package com.connectchat.controller;
 
+import com.connectchat.repository.UserRepository;
 import com.connectchat.security.CustomUserDetailsService;
 import com.connectchat.security.UserPrincipal;
+import com.connectchat.service.FcmService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -23,13 +25,11 @@ public class CallController {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final CustomUserDetailsService userDetailsService;
+    private final UserRepository userRepository;
+    private final FcmService fcmService;
 
-    // Single background thread used to re-deliver CALL_OFFER after a short delay.
-    // On older clients the STOMP frame collector starts ~5s after connect (after
-    // initial API calls finish), so the first delivery can race and be dropped.
-    // The retry arrives after the collector is guaranteed to be running.
-    // onIncomingOffer() on the client guards with "if not Idle return", so a
-    // duplicate offer when the call is already Incoming is safely ignored.
+    // Resend CALL_OFFER after 6s for clients whose STOMP collector starts late.
+    // onIncomingOffer() guards with "if not Idle return" so duplicates are safe.
     private final ScheduledExecutorService retryScheduler =
             Executors.newSingleThreadScheduledExecutor();
 
@@ -41,7 +41,8 @@ public class CallController {
         }
         String targetEmail = (String) payload.get("targetEmail");
         String callerEmail = principal.getName();
-        log.info("CALL_OFFER from={} to={} type={}", callerEmail, targetEmail, payload.get("callType"));
+        String callType = (String) payload.getOrDefault("callType", "video");
+        log.info("CALL_OFFER from={} to={} type={}", callerEmail, targetEmail, callType);
         if (targetEmail == null || targetEmail.isBlank()) {
             log.warn("CALL_OFFER rejected — targetEmail blank");
             return;
@@ -64,18 +65,40 @@ public class CallController {
         msg.put("callerAvatar", callerAvatar);
         msg.put("conversationId", payload.getOrDefault("conversationId", ""));
         msg.put("sdp", payload.getOrDefault("sdp", ""));
-        msg.put("callType", payload.getOrDefault("callType", "video"));
+        msg.put("callType", callType);
 
-        // First delivery — may be dropped if callee collector isn't ready yet
+        // Deliver via STOMP (for foreground/background clients)
         messagingTemplate.convertAndSendToUser(targetEmail, "/queue/call", msg);
 
-        // Retry after 6s — by then the collector is definitely running.
-        // Duplicate is safely ignored by the client's onIncomingOffer() guard.
+        // Retry after 6s for clients whose collector starts late
         final String target = targetEmail;
         final Map<String, Object> retry = new HashMap<>(msg);
         retryScheduler.schedule(
                 () -> messagingTemplate.convertAndSendToUser(target, "/queue/call", retry),
                 6, TimeUnit.SECONDS);
+
+        // FCM push — wakes the device even when the app is fully closed
+        final String finalCallerName = callerName;
+        final String finalCallerAvatar = callerAvatar;
+        try {
+            userRepository.findByEmail(targetEmail).ifPresent(callee -> {
+                if (callee.getFcmToken() != null) {
+                    Map<String, String> fcmData = new HashMap<>();
+                    fcmData.put("type", "CALL_OFFER");
+                    fcmData.put("callerEmail", callerEmail);
+                    fcmData.put("callerName", finalCallerName);
+                    fcmData.put("callerAvatar", finalCallerAvatar);
+                    fcmData.put("conversationId", (String) payload.getOrDefault("conversationId", ""));
+                    fcmData.put("sdp", (String) payload.getOrDefault("sdp", ""));
+                    fcmData.put("callType", callType);
+                    String callNotifBody = callType.equals("video") ? "Incoming video call" : "Incoming voice call";
+                    fcmService.sendNotification(callee.getFcmToken(), finalCallerName, callNotifBody, fcmData);
+                    log.info("FCM call push sent to {}", targetEmail);
+                }
+            });
+        } catch (Exception e) {
+            log.warn("FCM call push failed for {}: {}", targetEmail, e.getMessage());
+        }
     }
 
     @MessageMapping("/call.answer")

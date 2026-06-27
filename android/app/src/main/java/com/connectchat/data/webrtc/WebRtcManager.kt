@@ -12,7 +12,8 @@ class WebRtcManager @Inject constructor(
 ) {
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var peerConnection: PeerConnection? = null
-    private var localVideoTrack: VideoTrack? = null
+    var localVideoTrack: VideoTrack? = null
+        private set
     private var localAudioTrack: AudioTrack? = null
     private var localVideoSource: VideoSource? = null
     private var localStream: MediaStream? = null

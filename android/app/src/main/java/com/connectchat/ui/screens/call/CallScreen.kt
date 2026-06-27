@@ -42,7 +42,6 @@ fun CallScreen(
     val remoteVideoTrack by viewModel.remoteVideoTrack.collectAsState()
     val eglBase = remember { viewModel.getEglBase() }
 
-    // Request camera + mic permissions up front
     val permissions = rememberMultiplePermissionsState(
         listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
     )
@@ -85,8 +84,6 @@ private fun IncomingCallView(
     permissionsGranted: Boolean
 ) {
     val isVideo = state.callType == "video"
-    val localSinkRef = remember { mutableStateOf<VideoSink>(NoOpVideoSink) }
-    val rendererReady = remember { mutableStateOf(!isVideo) }
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A2E)),
@@ -113,31 +110,13 @@ private fun IncomingCallView(
                     label = "Accept",
                     tint = Color(0xFF00C853)
                 ) {
-                    if (rendererReady.value && permissionsGranted) {
-                        viewModel.acceptCall(localSinkRef.value, isVideo)
+                    // Accept immediately; local video routes to PiP renderer in ActiveCallView
+                    if (permissionsGranted) {
+                        viewModel.acceptCall(NoOpVideoSink, isVideo)
                     }
                 }
             }
         }
-
-        // 1×1 invisible renderer to have an EGL surface ready for the video path
-        if (isVideo) {
-            AndroidView(
-                factory = { ctx ->
-                    SurfaceViewRenderer(ctx).apply {
-                        layoutParams = ViewGroup.LayoutParams(1, 1)
-                        init(eglBase.eglBaseContext, null)
-                        localSinkRef.value = this
-                        rendererReady.value = true
-                    }
-                },
-                modifier = Modifier.size(1.dp)
-            )
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { (localSinkRef.value as? SurfaceViewRenderer)?.release() }
     }
 }
 
@@ -175,7 +154,6 @@ private fun OutgoingCallView(
             )
         }
 
-        // Start media once permissions granted and (for video) renderer is ready
         LaunchedEffect(permissionsGranted, localSinkRef.value) {
             if (!permissionsGranted || mediaStarted.value) return@LaunchedEffect
             val readyForVideo = !isVideo || localSinkRef.value != null
@@ -186,7 +164,6 @@ private fun OutgoingCallView(
             }
         }
 
-        // Calling overlay text
         Column(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 80.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -233,16 +210,21 @@ private fun ActiveCallView(
 ) {
     val isVideo = callType == "video"
     val remoteSinkRef = remember { mutableStateOf<SurfaceViewRenderer?>(null) }
+    val localPipSinkRef = remember { mutableStateOf<SurfaceViewRenderer?>(null) }
 
-    // Attach incoming remote track to renderer as soon as both are ready
     LaunchedEffect(remoteVideoTrack, remoteSinkRef.value) {
         val renderer = remoteSinkRef.value ?: return@LaunchedEffect
         remoteVideoTrack?.addSink(renderer)
     }
 
+    // Wire local video track to PiP renderer once both are ready
+    LaunchedEffect(localPipSinkRef.value) {
+        val renderer = localPipSinkRef.value ?: return@LaunchedEffect
+        viewModel.localVideoTrack?.addSink(renderer)
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (isVideo) {
-            // Full-screen remote video
             AndroidView(
                 factory = { ctx ->
                     SurfaceViewRenderer(ctx).apply {
@@ -258,13 +240,14 @@ private fun ActiveCallView(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Local camera picture-in-picture (top right)
+            // Local camera PiP — top right corner
             AndroidView(
                 factory = { ctx ->
                     SurfaceViewRenderer(ctx).apply {
                         init(eglBase.eglBaseContext, null)
                         setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
                         setMirror(true)
+                        localPipSinkRef.value = this
                     }
                 },
                 modifier = Modifier
@@ -289,7 +272,6 @@ private fun ActiveCallView(
             }
         }
 
-        // Control bar
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -330,9 +312,12 @@ private fun ActiveCallView(
 
     DisposableEffect(Unit) {
         onDispose {
-            val renderer = remoteSinkRef.value
-            if (renderer != null) remoteVideoTrack?.removeSink(renderer)
-            renderer?.release()
+            val remote = remoteSinkRef.value
+            if (remote != null) remoteVideoTrack?.removeSink(remote)
+            remote?.release()
+            val localPip = localPipSinkRef.value
+            if (localPip != null) viewModel.localVideoTrack?.removeSink(localPip)
+            localPip?.release()
         }
     }
 }

@@ -15,7 +15,9 @@ class ConnectChatApp : Application() {
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
+        val manager = getSystemService(NotificationManager::class.java)
+
+        val msgChannel = NotificationChannel(
             ConnectChatFcmService.CHANNEL_ID,
             "Messages",
             NotificationManager.IMPORTANCE_HIGH
@@ -24,7 +26,18 @@ class ConnectChatApp : Application() {
             enableLights(true)
             enableVibration(true)
         }
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+        manager.createNotificationChannel(msgChannel)
+
+        val callChannel = NotificationChannel(
+            ConnectChatFcmService.CALL_CHANNEL_ID,
+            "Calls",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Incoming call notifications"
+            enableLights(true)
+            enableVibration(true)
+            setBypassDnd(true)
+        }
+        manager.createNotificationChannel(callChannel)
     }
 }

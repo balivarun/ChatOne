@@ -1,5 +1,7 @@
 package com.connectchat
 
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -19,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import com.connectchat.data.call.CallManager
 import com.connectchat.data.call.CallState
 import com.connectchat.data.preferences.UserPreferences
+import com.connectchat.data.service.ConnectChatFcmService
 import com.connectchat.ui.navigation.NavGraph
 import com.connectchat.ui.navigation.Screen
 import com.connectchat.ui.theme.Accent
@@ -40,6 +43,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingConversationId.value = intent.getStringExtra("conversationId")
+        // Dismiss incoming call notification when user taps Answer
+        if (intent?.action == ConnectChatFcmService.ACTION_INCOMING_CALL) {
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .cancel(ConnectChatFcmService.CALL_NOTIFICATION_ID)
+        }
         enableEdgeToEdge()
         setContent {
             val token by userPreferences.accessToken
@@ -99,5 +107,9 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingConversationId.value = intent.getStringExtra("conversationId")
+        if (intent.action == ConnectChatFcmService.ACTION_INCOMING_CALL) {
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .cancel(ConnectChatFcmService.CALL_NOTIFICATION_ID)
+        }
     }
 }
