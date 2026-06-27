@@ -94,7 +94,12 @@ fun NavGraph(navController: NavHostController, startDestination: String) {
         }
         composable(Screen.Call.route) {
             CallScreen(
-                onCallEnded = { navController.popBackStack() }
+                onCallEnded = {
+                    navController.navigate(Screen.ChatList.route) {
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
             )
         }
     }
