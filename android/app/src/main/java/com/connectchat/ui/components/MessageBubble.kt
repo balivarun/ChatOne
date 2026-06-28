@@ -46,11 +46,14 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.isSystemInDarkTheme
 import coil.compose.AsyncImage
 import com.connectchat.data.api.model.MessageType
 import com.connectchat.data.local.MessageEntity
 import com.connectchat.ui.theme.Accent
+import com.connectchat.ui.theme.MessageInDark
 import com.connectchat.ui.theme.MessageInLight
+import com.connectchat.ui.theme.MessageOutDark
 import com.connectchat.ui.theme.MessageOutLight
 import java.time.Instant
 import java.time.ZoneId
@@ -70,6 +73,11 @@ fun MessageBubble(
     var showContextMenu by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val maxBubbleWidth = (configuration.screenWidthDp * 0.75).dp
+    val isDark = isSystemInDarkTheme()
+    val bubbleColorOwn = if (isDark) MessageOutDark else MessageOutLight
+    val bubbleColorOther = if (isDark) MessageInDark else MessageInLight
+    val textColor = if (isDark) Color.White else Color.Black
+    val subtleColor = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.5f)
 
     if (message.isDeleted) {
         Row(
@@ -79,7 +87,7 @@ fun MessageBubble(
             Box(
                 modifier = Modifier
                     .background(
-                        color = if (isOwn) MessageOutLight.copy(alpha = 0.5f) else MessageInLight.copy(alpha = 0.5f),
+                        color = (if (isOwn) bubbleColorOwn else bubbleColorOther).copy(alpha = 0.5f),
                         shape = RoundedCornerShape(12.dp)
                     )
                     .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -167,7 +175,7 @@ fun MessageBubble(
             modifier = Modifier
                 .widthIn(max = maxBubbleWidth)
                 .background(
-                    color = if (isOwn) MessageOutLight else MessageInLight,
+                    color = if (isOwn) bubbleColorOwn else bubbleColorOther,
                     shape = RoundedCornerShape(
                         topStart = if (isOwn) 12.dp else 4.dp,
                         topEnd = if (isOwn) 4.dp else 12.dp,
@@ -254,7 +262,7 @@ fun MessageBubble(
                         Text(
                             text = message.content,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Black
+                            color = textColor
                         )
                     }
                 }
@@ -270,7 +278,7 @@ fun MessageBubble(
                     Text(
                         text = "edited",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.Black.copy(alpha = 0.5f),
+                        color = subtleColor,
                         fontStyle = FontStyle.Italic,
                         fontSize = 10.sp
                     )
@@ -278,7 +286,7 @@ fun MessageBubble(
                 Text(
                     text = formatMessageTime(message.createdAt),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.Black.copy(alpha = 0.5f),
+                    color = subtleColor,
                     fontSize = 10.sp
                 )
                 if (isOwn) {
@@ -286,7 +294,7 @@ fun MessageBubble(
                         imageVector = if (message.isRead) Icons.Default.DoneAll else Icons.Default.Done,
                         contentDescription = if (message.isRead) "Read" else "Sent",
                         modifier = Modifier.size(14.dp),
-                        tint = if (message.isRead) Accent else Color.Black.copy(alpha = 0.4f)
+                        tint = if (message.isRead) Accent else subtleColor
                     )
                 }
             }

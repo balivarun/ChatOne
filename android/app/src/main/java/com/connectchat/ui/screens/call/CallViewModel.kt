@@ -24,6 +24,7 @@ class CallViewModel @Inject constructor(
 
     var isMicOn by mutableStateOf(true)
     var isCameraOn by mutableStateOf(true)
+    var isSpeakerOn by mutableStateOf(false)
 
     fun startOutgoingMedia(localSink: VideoSink, isVideo: Boolean) {
         callManager.startOutgoingMedia(localSink, isVideo)
@@ -53,6 +54,11 @@ class CallViewModel @Inject constructor(
 
     fun switchCamera() {
         callManager.switchCamera()
+    }
+
+    fun toggleSpeaker() {
+        isSpeakerOn = !isSpeakerOn
+        callManager.setSpeaker(isSpeakerOn)
     }
 
     fun getEglBase() = callManager.getEglBase()

@@ -124,6 +124,12 @@ class WebRtcManager @Inject constructor(
     fun toggleCamera(enabled: Boolean) { localVideoTrack?.setEnabled(enabled) }
     fun switchCamera() { (videoCapturer as? CameraVideoCapturer)?.switchCamera(null) }
 
+    fun setSpeaker(enabled: Boolean) {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        am.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
+        am.isSpeakerphoneOn = enabled
+    }
+
     fun dispose() {
         runCatching { videoCapturer?.stopCapture() }
         videoCapturer?.dispose()

@@ -34,9 +34,10 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Reply
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,6 +72,7 @@ import com.connectchat.ui.components.MessageBubble
 import com.connectchat.ui.components.TypingIndicator
 import com.connectchat.ui.components.UserAvatar
 import com.connectchat.ui.theme.Accent
+import com.connectchat.ui.theme.ChatBgDark
 import com.connectchat.ui.theme.ChatBgLight
 import kotlinx.coroutines.launch
 import java.io.File
@@ -131,6 +133,8 @@ fun ChatScreen(
             cameraLauncher.launch(uri)
         }
     }
+
+    val isDark = isSystemInDarkTheme()
 
     val showScrollToBottom by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 3 }
@@ -229,7 +233,7 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(ChatBgLight)
+                .background(if (isDark) ChatBgDark else ChatBgLight)
                 .imePadding()
         ) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -362,7 +366,7 @@ fun ChatScreen(
                         Icon(Icons.Default.Close, contentDescription = "Cancel Reply")
                     }
                 }
-                Divider()
+                HorizontalDivider()
             }
 
             viewModel.editingMessage?.let {
@@ -386,7 +390,7 @@ fun ChatScreen(
                         Icon(Icons.Default.Close, contentDescription = "Cancel Edit")
                     }
                 }
-                Divider()
+                HorizontalDivider()
             }
 
             Row(

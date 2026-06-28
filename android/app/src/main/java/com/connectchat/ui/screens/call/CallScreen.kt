@@ -15,8 +15,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.connectchat.data.call.CallState
@@ -68,6 +70,8 @@ fun CallScreen(
         )
         is CallState.Active -> ActiveCallView(
             callType = state.callType,
+            peerName = state.peerName,
+            peerAvatar = state.peerAvatar,
             viewModel = viewModel,
             remoteVideoTrack = remoteVideoTrack,
             eglBase = eglBase
@@ -108,13 +112,20 @@ private fun IncomingCallView(
                 CallActionButton(
                     icon = if (isVideo) Icons.Default.Videocam else Icons.Default.Call,
                     label = "Accept",
-                    tint = Color(0xFF00C853)
+                    tint = if (permissionsGranted) Color(0xFF00C853) else Color.Gray
                 ) {
-                    // Accept immediately; local video routes to PiP renderer in ActiveCallView
                     if (permissionsGranted) {
                         viewModel.acceptCall(NoOpVideoSink, isVideo)
                     }
                 }
+            }
+            if (!permissionsGranted) {
+                Text(
+                    text = "Camera & microphone access required\nto answer this call",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
@@ -204,6 +215,8 @@ private fun OutgoingCallView(
 @Composable
 private fun ActiveCallView(
     callType: String,
+    peerName: String,
+    peerAvatar: String?,
     viewModel: CallViewModel,
     remoteVideoTrack: VideoTrack?,
     eglBase: EglBase
@@ -212,12 +225,20 @@ private fun ActiveCallView(
     val remoteSinkRef = remember { mutableStateOf<SurfaceViewRenderer?>(null) }
     val localPipSinkRef = remember { mutableStateOf<SurfaceViewRenderer?>(null) }
 
+    var elapsedSeconds by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000L)
+            elapsedSeconds++
+        }
+    }
+    val timerText = "%02d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60)
+
     LaunchedEffect(remoteVideoTrack, remoteSinkRef.value) {
         val renderer = remoteSinkRef.value ?: return@LaunchedEffect
         remoteVideoTrack?.addSink(renderer)
     }
 
-    // Wire local video track to PiP renderer once both are ready
     LaunchedEffect(localPipSinkRef.value) {
         val renderer = localPipSinkRef.value ?: return@LaunchedEffect
         viewModel.localVideoTrack?.addSink(renderer)
@@ -256,18 +277,31 @@ private fun ActiveCallView(
                     .size(width = 100.dp, height = 140.dp)
                     .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
             )
+
+            // Timer overlay in top-left for video calls
+            Text(
+                text = timerText,
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 14.sp,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 16.dp, top = 16.dp)
+                    .background(Color.Black.copy(alpha = 0.4f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
         } else {
+            // Voice call — show avatar, name, and timer
             Box(
                 modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A2E)),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Phone, contentDescription = null,
-                        tint = Color.White, modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Text("Call Connected", color = Color.White, fontSize = 20.sp)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    UserAvatar(avatarUrl = peerAvatar, displayName = peerName, size = 100.dp)
+                    Text(peerName, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text(timerText, color = Color.White.copy(alpha = 0.7f), fontSize = 18.sp)
                 }
             }
         }
@@ -299,9 +333,9 @@ private fun ActiveCallView(
                 )
             }
             CallControlButton(
-                icon = Icons.Default.VolumeUp,
-                label = "Speaker",
-                onClick = { }
+                icon = if (viewModel.isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
+                label = if (viewModel.isSpeakerOn) "Speaker" else "Earpiece",
+                onClick = { viewModel.toggleSpeaker() }
             )
             CallActionButton(
                 icon = Icons.Default.CallEnd, label = "End", tint = Color.Red,

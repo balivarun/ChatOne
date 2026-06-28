@@ -38,7 +38,11 @@ sealed class CallState {
         val conversationId: String,
         val callType: String
     ) : CallState()
-    data class Active(val callType: String) : CallState()
+    data class Active(
+        val callType: String,
+        val peerName: String = "",
+        val peerAvatar: String? = null
+    ) : CallState()
 }
 
 @Singleton
@@ -88,13 +92,24 @@ class CallManager @Inject constructor(
             when (state) {
                 PeerConnection.IceConnectionState.CONNECTED,
                 PeerConnection.IceConnectionState.COMPLETED -> {
-                    val type = when (val s = _callState.value) {
+                    val s = _callState.value
+                    val type = when (s) {
                         is CallState.Outgoing -> s.callType
                         is CallState.Incoming -> s.callType
                         else -> "video"
                     }
+                    val name = when (s) {
+                        is CallState.Outgoing -> s.targetName
+                        is CallState.Incoming -> s.callerName
+                        else -> ""
+                    }
+                    val avatar = when (s) {
+                        is CallState.Outgoing -> s.targetAvatar
+                        is CallState.Incoming -> s.callerAvatar
+                        else -> null
+                    }
                     _callStatus.value = "Connected"
-                    _callState.value = CallState.Active(type)
+                    _callState.value = CallState.Active(type, name, avatar)
                 }
                 PeerConnection.IceConnectionState.DISCONNECTED,
                 PeerConnection.IceConnectionState.FAILED,
@@ -225,5 +240,6 @@ class CallManager @Inject constructor(
     fun toggleMic(enabled: Boolean) = webRtcManager.toggleMic(enabled)
     fun toggleCamera(enabled: Boolean) = webRtcManager.toggleCamera(enabled)
     fun switchCamera() = webRtcManager.switchCamera()
+    fun setSpeaker(enabled: Boolean) = webRtcManager.setSpeaker(enabled)
     fun getEglBase() = webRtcManager.eglBase
 }
